@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-03-18 02:19:37
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-18 03:47:00
+LastEditTime: 2024-03-18 05:27:02
 FilePath: /data_process/src/controller/keybase_controller.py
 Description: 
 '''
@@ -49,7 +49,7 @@ class KeybaseController(httpsvr.BaseController):
                     FROM keybase_proof WHERE keybase_username='{}'"""
                 cursor.execute(ssql.format(username))
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
-
+                cursor.close()
             elif platform in ["twitter", "dns", "facebook", "hackernews", "github", "mstdnjp", "reddit", "lobsters"]:
                 ssql = """
                     SELECT keybase_username, platform, username, display_name, proof_type, proof_state, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_time 
@@ -59,11 +59,10 @@ class KeybaseController(httpsvr.BaseController):
                 cursor.execute(ssql.format(platform, username))
                 logging.debug(ssql.format(platform, username))
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
-            cursor.close()
+                cursor.close()
         except Exception as e:
             code = -1
             msg = repr(e)
             logging.exception(e)
-            cursor.close()
 
         return httpsvr.Resp(msg=msg, data=rows, code=code)
