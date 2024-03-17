@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-18 04:07:47
+LastEditTime: 2024-03-18 05:39:18
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -137,12 +137,10 @@ def load_crossbell_settings(config_file):
     except Exception as ex:
         logging.exception(ex)
 
-pg_conn = None
+
 def get_conn():
-    global pg_conn
     try:
-        if pg_conn is None or pg_conn.closed:
-            pg_conn = psycopg2.connect(PG_DSN["keybase"])
+        pg_conn = psycopg2.connect(PG_DSN["keybase"])
     except Exception as e:
         logging.exception(e)
         raise e

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-03-18 02:19:37
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-18 05:27:02
+LastEditTime: 2024-03-18 05:39:45
 FilePath: /data_process/src/controller/keybase_controller.py
 Description: 
 '''
@@ -14,7 +14,7 @@ import time
 
 from httpsvr import httpsvr
 import psycopg2
-from setting import get_conn, pg_conn
+from setting import get_conn
 
 
 def dict_factory(cursor, row):
@@ -35,13 +35,11 @@ class KeybaseController(httpsvr.BaseController):
         platform = self.inout.get_argument("platform", "")
         username = self.inout.get_argument("username", "")
         logging.debug("query proofs_summary {}={}".format(platform, username))
-        global pg_conn
         rows = []
         code = 0
         msg = ""
         try:
-            if pg_conn is None:
-                pg_conn = get_conn()
+            pg_conn = get_conn()
             cursor = pg_conn.cursor()
             if platform == "keybase":
                 ssql = """
@@ -60,6 +58,7 @@ class KeybaseController(httpsvr.BaseController):
                 logging.debug(ssql.format(platform, username))
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
                 cursor.close()
+            pg_conn.close()
         except Exception as e:
             code = -1
             msg = repr(e)
