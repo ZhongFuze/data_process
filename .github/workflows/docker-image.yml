@@ -6,7 +6,7 @@ on:
       - main
 jobs:
   build-image:
-    if: github.ref_name == 'main' && github.repository == 'NextDotID/data_process'
+    if: github.ref_name == 'main' && github.repository == 'ZhongFuze/data_process'
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
