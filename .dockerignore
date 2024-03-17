@@ -1,0 +1,11 @@
+/.vscode
+/.dockerignore
+/Dockerfile
+/.git
+/.gitignore
+/.github
+/docs
+/log
+/data
+/justfile
+/Makefile

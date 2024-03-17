@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  server:
+    image: ghcr.io/nextdotid/data_process:main
+    container_name: data_process
+    volumes:
+      - ~/shared_data:/app/data
+      - ./app/config:/app/config
+      - ./app/log:/app/log
