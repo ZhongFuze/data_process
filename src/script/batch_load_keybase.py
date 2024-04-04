@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-02-01 16:43:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-17 22:41:47
+LastEditTime: 2024-04-04 16:34:48
 FilePath: /data_process/src/script/batch_load_keybase.py
 Description: prepare loading keybase follow data to db.
 '''
@@ -29,6 +29,55 @@ from urllib.parse import quote
 keybase_data_dirs = os.path.join(setting.Settings["datapath"], "keybase")
 keybase_social_feeds_dirs = os.path.join(setting.Settings["datapath"], "keybase_social_feeds")
 keybase_postgresql_dirs = os.path.join(setting.Settings["datapath"], "keybase_postgresql")
+
+
+def prepare_btc_import():
+    if not os.path.exists(keybase_postgresql_dirs):
+        os.makedirs(keybase_postgresql_dirs)
+    if not os.path.exists(keybase_postgresql_dirs + "/keybase_error_json/"):
+        os.makedirs(keybase_postgresql_dirs + "/keybase_error_json/")
+    keybase_btc_fw = open(keybase_postgresql_dirs + "/keybase_btc.tsv", "w", encoding="utf-8")
+
+    for filename in os.listdir(keybase_data_dirs):
+        if filename.endswith(".json") and not filename.endswith("_relation.json"):
+            file_path = os.path.join(keybase_data_dirs, filename)
+            print("loading proof for", filename)
+            with open(file_path, 'r', encoding="utf-8") as json_file:
+                if json_file is None:
+                    print(file_path, "is None, skip")
+                    continue
+                data = None
+                try:
+                    data = json.load(json_file)
+                except:
+                    with open(keybase_postgresql_dirs + "/keybase_error_json/" + filename, "a", encoding="utf-8") as f:
+                        f.write(json_file.read())
+                    continue
+                keybase_username = data["username"]
+                cryptocurrencies = data["cryptocurrencies"]
+                if cryptocurrencies is None:
+                    continue
+                if len(cryptocurrencies) == 0:
+                    continue
+
+                for row in cryptocurrencies:
+                    record_id = row["pkhash"]
+                    platform = row["type"]
+                    identity = row["address"]
+                    display_name = ""
+                    proof_type = 0
+                    proof_state = 0
+                    human_url = ""
+                    api_url = ""
+                    created_at = "1970-01-01 00:00:00"
+                    keybase_btc_fw.write(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                            keybase_username, platform, identity, display_name, proof_type, proof_state, human_url, api_url, created_at, record_id
+                        )
+                    )
+
+    keybase_btc_fw.close()
+
 
 def prepare_postgresql_import():
     if not os.path.exists(keybase_postgresql_dirs):
@@ -411,7 +460,8 @@ def prepare_follow_data():
 
 
 if __name__ == "__main__":
-    prepare_postgresql_import()
+    prepare_btc_import()
+    # prepare_postgresql_import()
     # prepare_data()
     # upsert_hyper_vertex()
     # prepare_follow_data()

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-03-18 02:19:37
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-18 05:39:45
+LastEditTime: 2024-04-04 17:18:22
 FilePath: /data_process/src/controller/keybase_controller.py
 Description: 
 '''
@@ -43,14 +43,14 @@ class KeybaseController(httpsvr.BaseController):
             cursor = pg_conn.cursor()
             if platform == "keybase":
                 ssql = """
-                    SELECT keybase_username, platform, username, display_name, proof_type, proof_state, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_time
+                    SELECT keybase_username, platform, username, display_name, proof_type, proof_state, record_id, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_time
                     FROM keybase_proof WHERE keybase_username='{}'"""
                 cursor.execute(ssql.format(username))
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
                 cursor.close()
-            elif platform in ["twitter", "dns", "facebook", "hackernews", "github", "mstdnjp", "reddit", "lobsters"]:
+            elif platform in ["twitter", "dns", "facebook", "hackernews", "github", "mstdnjp", "reddit", "lobsters", "bitcoin"]:
                 ssql = """
-                    SELECT keybase_username, platform, username, display_name, proof_type, proof_state, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_time 
+                    SELECT keybase_username, platform, username, display_name, proof_type, proof_state, record_id, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_time 
                     FROM keybase_proof
                     WHERE keybase_username IN (SELECT keybase_username FROM keybase_proof WHERE platform='{}' AND username='{}')
                     """
