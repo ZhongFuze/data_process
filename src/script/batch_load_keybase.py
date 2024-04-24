@@ -4,13 +4,13 @@
 Author: Zella Zhong
 Date: 2024-02-01 16:43:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-04 16:34:48
+LastEditTime: 2024-04-25 00:35:56
 FilePath: /data_process/src/script/batch_load_keybase.py
 Description: prepare loading keybase follow data to db.
 '''
 import sys
 sys.path.append("/app")
-# sys.path.append("/Users/fuzezhong/Documents/GitHub/nextdotid/data_process/src")
+# sys.path.append("/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src")
 
 import os
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
@@ -27,7 +27,7 @@ from script.flock import FileLock
 from urllib.parse import quote
 
 keybase_data_dirs = os.path.join(setting.Settings["datapath"], "keybase")
-keybase_social_feeds_dirs = os.path.join(setting.Settings["datapath"], "keybase_social_feeds")
+keybase_social_feeds_dirs = os.path.join(setting.Settings["datapath"], "keybase_social_feeds_v2")
 keybase_postgresql_dirs = os.path.join(setting.Settings["datapath"], "keybase_postgresql")
 
 
@@ -180,6 +180,8 @@ def prepare_data():
                         "uid": "",
                         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
                         "uuid": str(uuid.uuid4()),
+                        "expired_at": "1970-01-01 00:00:00",
+                        "reverse": False,
                     }
                 }
                 from_write_str = "{}\t{}\t{}\t{}\t{}\t{}".format(
@@ -193,7 +195,7 @@ def prepare_data():
                 if "proofs" in data:
                     if data["proofs"] is None:
                         # 独立的点, 无proof证明, 直接创造一个点
-                        params = {"vertex_str": json.dumps(keybase_identity)}
+                        params = {"vertex_str": json.dumps(keybase_identity), "updated_nanosecond": int(time.time()*1e6)}
                         isolated_raw = json.dumps(params)
                         keybase_upsert_isolated_fw.write(isolated_raw + "\n")
                         continue
@@ -215,6 +217,8 @@ def prepare_data():
                                 "uid": "",
                                 "updated_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
                                 "uuid": str(uuid.uuid4()),
+                                "expired_at": "1970-01-01 00:00:00",
+                                "reverse": False,
                             }
                         }
                         proof_state = proof["result"]["proofResult"]["state"]
@@ -240,7 +244,7 @@ def prepare_data():
                             target["attributes"]["updated_at"]
                         )
                         keybase_identity_fw.write(to_write_str + "\n")
-                        params = {"from_str": json.dumps(keybase_identity), "to_str": json.dumps(target)}
+                        params = {"from_str": json.dumps(keybase_identity), "to_str": json.dumps(target), "updated_nanosecond": int(time.time()*1e6)}
                         json_raw = json.dumps(params)
                         keybase_upsert_fw.write(json_raw + "\n")
                         keybase_proof_fw.write(proof_record + "\n")
@@ -294,17 +298,17 @@ def upsert_hyper_vertex():
     for info in request_isolated_list:
         upsert_isolated_vertex(info)
         cnt += 1
-        if cnt % 10000 == 0:
-            time.sleep(60)
-            print("time sleep 60s...")
+        if cnt % 1000 == 0:
+            time.sleep(5)
+            print("time sleep 5s...")
 
     count = 0
     for info in request_from_to_list:
         runner(info)
         count += 1
-        if count % 10000 == 0:
-            time.sleep(60)
-            print("time sleep 60s...")
+        if count % 1000 == 0:
+            time.sleep(5)
+            print("time sleep 5s...")
 
     keybase_hyper_vertex_result_fw.close()
     keybase_isolated_vertex_result_fw.close()
@@ -317,7 +321,7 @@ def runner(info):
     try:
         upsert_url = "http://ec2-16-162-55-226.ap-east-1.compute.amazonaws.com:9000/query/SocialGraph/upsert_hyper_vertex"
         headers = {
-            "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
+            # "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
             "Content-Type": "application/json; charset=utf-8",
         }
         response = requests.post(
@@ -356,7 +360,7 @@ def upsert_isolated_vertex(info):
     try:
         upsert_url = "http://ec2-16-162-55-226.ap-east-1.compute.amazonaws.com:9000/query/SocialGraph/upsert_isolated_vertex"
         headers = {
-            "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
+            # "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
             "Content-Type": "application/json; charset=utf-8",
         }
         response = requests.post(
@@ -460,8 +464,8 @@ def prepare_follow_data():
 
 
 if __name__ == "__main__":
-    prepare_btc_import()
+    # prepare_btc_import()
     # prepare_postgresql_import()
-    # prepare_data()
+    prepare_data()
     # upsert_hyper_vertex()
     # prepare_follow_data()
