@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-02-04 16:45:34
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-25 00:26:18
+LastEditTime: 2024-04-26 15:26:23
 FilePath: /data_process/src/script/batch_load_lensv2.py
 Description: 
 '''
@@ -24,6 +24,7 @@ import psycopg2
 import traceback
 from multiprocessing import Pool
 from urllib.parse import quote
+from urllib.parse import unquote
 
 
 import setting
@@ -321,6 +322,8 @@ def prepare_upsert_data():
             continue
         item = line.split("\t")
         # id	uuid	platform	identity	display_name	profile_url	added_at	updated_at	uid
+        display_name = quote(item[4], 'utf-8')
+        display_name = display_name.replace('\t', '    ')
         data = {
             "v_type": "Identities",
             "v_id": item[0],
@@ -328,7 +331,7 @@ def prepare_upsert_data():
                 "added_at": item[6],
                 "avatar_url": "",
                 "created_at": "1970-01-01 00:00:00",
-                "display_name": quote(item[4], 'utf-8'),
+                "display_name": display_name,
                 "id": item[0],
                 "identity": item[3],
                 "platform": item[2],
@@ -382,8 +385,8 @@ def prepare_upsert_data():
 
 
 def upsert_hyper_vertex():
-    lens_upsert_fr = open(lens_social_data_dirs + "/lens.upsert_hyper_vertex.txt", "r", encoding="utf-8")
-    lens_hyper_vertex_result_fw = open(lens_social_data_dirs + "/lens.upsert_result.tsv", "w", encoding="utf-8")
+    lens_upsert_fr = open(lens_social_data_dirs + "/lens.upsert_result.reupsert.special_character", "r", encoding="utf-8")
+    lens_hyper_vertex_result_fw = open(lens_social_data_dirs + "/lens.upsert_result.reupsert.tsv", "w", encoding="utf-8")
 
     request_from_to_list = []
     for line in lens_upsert_fr.readlines():
@@ -391,9 +394,20 @@ def upsert_hyper_vertex():
         if line == "":
             continue
         item = line.split("\t")
+
+        # for some especial case: display name not string
+        obj = json.loads(item[1])
+        to_str = obj["to_str"]
+        to_obj = json.loads(to_str)
+        display_name = unquote(to_obj["attributes"]["display_name"], 'utf-8')
+        to_obj["attributes"]["display_name"] = display_name
+
+        new_to_str = json.dumps(to_obj)
+        obj["to_str"] = new_to_str
+        new_json_raw = json.dumps(obj)
         info = {
             "to_id": item[0],
-            "json_raw": item[1],
+            "json_raw": new_json_raw,
         }
         request_from_to_list.append(info)
 
@@ -408,6 +422,7 @@ def upsert_hyper_vertex():
     for info in request_from_to_list:
         runner(info)
         count += 1
+        print(count)
         if count % 1000 == 0:
             time.sleep(5)
             print("time sleep 5s...")
@@ -499,5 +514,6 @@ def prepare_follow_data():
 
 
 if __name__ == "__main__":
-    upsert_hyper_vertex()
-    # prepare_upsert_data()
+    prepare_upsert_data()
+    # upsert_hyper_vertex()
+    # prepare_follow_data()

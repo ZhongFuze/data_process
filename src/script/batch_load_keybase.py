@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-02-01 16:43:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-25 00:35:56
+LastEditTime: 2024-04-25 01:16:59
 FilePath: /data_process/src/script/batch_load_keybase.py
 Description: prepare loading keybase follow data to db.
 '''
@@ -192,12 +192,69 @@ def prepare_data():
                     keybase_identity["attributes"]["display_name"],
                     keybase_identity["attributes"]["updated_at"])
                 keybase_identity_fw.write(from_write_str + "\n")
+
+                btc_flag = False
+                cryptocurrencies = data["cryptocurrencies"]
+                if cryptocurrencies is None:
+                    btc_flag = False
+                elif cryptocurrencies is not None and len(cryptocurrencies) == 0:
+                    btc_flag = False
+                else:
+                    for row in cryptocurrencies:
+                        btc_flag = True
+                        crypto_record_id = row["pkhash"]
+                        crypto_platform = row["type"]
+                        crypto_identity = row["address"]
+                        crypto_display_name = ""
+                        crypto_uuid = str(uuid.uuid4())
+                        crypto_updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+                        btc_primary_id = "{},{}".format(crypto_platform, crypto_identity)
+                        btc_write_str = "{}\t{}\t{}\t{}\t{}\t{}".format(
+                            btc_primary_id, 
+                            crypto_uuid,
+                            crypto_platform,
+                            crypto_identity,
+                            crypto_display_name,
+                            crypto_updated_at)
+                        keybase_identity_fw.write(btc_write_str + "\n")
+
+                        btc_target = {
+                            "v_type": "Identities",
+                            "v_id": btc_primary_id,
+                            "attributes": {
+                                "added_at": crypto_updated_at,
+                                "avatar_url": "",
+                                "created_at": "1970-01-01 00:00:00",
+                                "display_name": crypto_display_name,
+                                "id": btc_primary_id,
+                                "identity": crypto_identity,
+                                "platform": crypto_platform,
+                                "profile_url": "",
+                                "uid": "",
+                                "updated_at": crypto_updated_at,
+                                "uuid": crypto_uuid,
+                                "expired_at": "1970-01-01 00:00:00",
+                                "reverse": False,
+                            }
+                        }
+
+                        # from	to	source	created_at	uuid	level	record_id	updated_at	fetcher
+                        btc_proof_record = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(
+                            "{},{}".format("keybase", keybase_name), btc_primary_id,
+                            "keybase", "1970-01-01 00:00:00", str(uuid.uuid4()), 5, crypto_record_id, crypto_updated_at, "data_service"
+                        )
+                        params = {"from_str": json.dumps(keybase_identity), "to_str": json.dumps(btc_target), "updated_nanosecond": int(time.time()*1e6)}
+                        json_raw = json.dumps(params)
+                        keybase_upsert_fw.write(json_raw + "\n")
+                        keybase_proof_fw.write(btc_proof_record + "\n")
+
                 if "proofs" in data:
                     if data["proofs"] is None:
-                        # 独立的点, 无proof证明, 直接创造一个点
-                        params = {"vertex_str": json.dumps(keybase_identity), "updated_nanosecond": int(time.time()*1e6)}
-                        isolated_raw = json.dumps(params)
-                        keybase_upsert_isolated_fw.write(isolated_raw + "\n")
+                        if btc_flag is False:
+                            # 独立的点, 无proof证明, 直接创造一个点
+                            params = {"vertex_str": json.dumps(keybase_identity), "updated_nanosecond": int(time.time()*1e6)}
+                            isolated_raw = json.dumps(params)
+                            keybase_upsert_isolated_fw.write(isolated_raw + "\n")
                         continue
                     for proof in data["proofs"]:
                         platform = proof["proof"]["key"]
