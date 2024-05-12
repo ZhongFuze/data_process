@@ -36,7 +36,7 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+         cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
       - name: Clean up post-build cache
         run: |
