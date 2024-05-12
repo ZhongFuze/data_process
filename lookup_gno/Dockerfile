@@ -4,6 +4,10 @@ FROM node:16
 
 LABEL maintainer="Zella Zhong <zella@mask.io>"
 
+RUN apt-get update -y && \
+    apt-get upgrade -y --force-yes && \
+    apt-get install -y --force-yes supervisor
+
 WORKDIR /nodejs_app
 
 COPY package*.json ./
@@ -12,4 +16,4 @@ RUN npm install --only=production
 
 COPY . .
 
-ENTRYPOINT [ "node", "index.js" ]
+ENTRYPOINT ["./run.sh"]
