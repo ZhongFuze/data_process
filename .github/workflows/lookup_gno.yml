@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ZhongFuze/lookup-gno
+      IMAGE_NAME: zhongfuze/lookup-gno
     steps:
       - name: Checkout
         uses: actions/checkout@v3
