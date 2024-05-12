@@ -6,6 +6,7 @@ const web3name = createWeb3Name();
 
 app.get('/lookup/gno/:address', async (req, res) => {
     const address = req.params.address;
+    console.log(`lookup ${address}`)
     try {
         const name = await web3name.getDomainName({
           address: address,
@@ -19,6 +20,6 @@ app.get('/lookup/gno/:address', async (req, res) => {
 });
 
 const PORT = 22222;
-app.listen(PORT, () => {
+app.listen(PORT, 'localhost', () => {
   console.log(`Server running on port ${PORT}`);
 });
