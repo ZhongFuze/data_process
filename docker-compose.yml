@@ -8,6 +8,11 @@ services:
       - ./app/config:/app/config
       - ./app/log:/app/log
     network_mode: "host"
+  loopup-gno:
+    image: ghcr.io/zhongfuze/lookup-gno:main
+    container_name: loopup_gno
+    volumes:
+      - ./nodejs_app:/nodejs_app
   nginx:
     image: nginx
     container_name: nginx

@@ -12,5 +12,4 @@ RUN npm install --only=production
 
 COPY . .
 
-# Run startup.
-CMD [ "node", "index.js" ]
+ENTRYPOINT [ "node", "index.js" ]
