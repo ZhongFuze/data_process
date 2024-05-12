@@ -11,8 +11,7 @@ services:
   loopup-gno:
     image: ghcr.io/zhongfuze/lookup-gno:main
     container_name: loopup_gno
-    volumes:
-      - ./nodejs_app:/nodejs_app
+    network_mode: "host"
   nginx:
     image: nginx
     container_name: nginx
