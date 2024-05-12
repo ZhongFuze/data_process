@@ -20,6 +20,6 @@ app.get('/lookup/gno/:address', async (req, res) => {
 });
 
 const PORT = 22222;
-app.listen(PORT, 'localhost', () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`Server running on port ${PORT}`);
 });

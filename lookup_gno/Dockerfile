@@ -16,4 +16,5 @@ RUN npm install --only=production
 
 COPY . .
 
-ENTRYPOINT ["./run.sh"]
+EXPOSE 22222
+ENTRYPOINT ["./nodejs_app/run.sh"]
