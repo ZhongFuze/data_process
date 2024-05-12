@@ -1,0 +1,20 @@
+{
+  "name": "lookup_gno",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "Zella Zhong <zhongsigen@outlook.com>",
+  "license": "ISC",
+  "dependencies": {
+    "@ensdomains/address-encoder": "^1.1.1",
+    "@web3-name-sdk/core": "^0.1.18",
+    "ethers": "^6.12.1",
+    "viem": "^1.21.4",
+    "express": "^4.17.1"
+  }
+}

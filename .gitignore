@@ -6,3 +6,4 @@ data
 src/config/*.toml
 !src/config/main.sample.toml
 app
+lookup_gno/node_modules/
