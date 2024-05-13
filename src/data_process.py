@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-14 00:12:49
+LastEditTime: 2024-05-14 00:35:24
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         # PolygonLensFetcher().offline_dump("2022-05-16", "2023-06-30")
         # PolygonLensFetcher().offline_dump_by_data_list(["2023-03-03"])
         scheduler = BackgroundScheduler()
-        cron_config = {"minute": "30", "second": "0"}
+        cron_config = {"minute": "50", "second": "0"}
         scheduler.add_job(GnosisDomainsFetcher().online_dump(), CronTrigger(**cron_config))
         scheduler.start()
         while True:
