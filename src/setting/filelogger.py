@@ -295,6 +295,7 @@ def InitLogger(config):
     else:
         static_file_handler = FileHandler(config)
         static_file_handler.setLevel(logging.DEBUG)
+        static_file_handler.setPrintStd()
         static_file_handler.setFormatter(Formatter())
 
         logger.addHandler(static_file_handler)
