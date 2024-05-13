@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-03-18 05:39:18
+LastEditTime: 2024-05-13 17:59:50
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -57,6 +57,7 @@ def load_settings(env="test"):
         config_file = "/app/config/testing.toml"
     elif env == "development":
         config_file = "./config/development.toml"
+        # config_file = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src/config/development.toml"
     elif env == "production":
         config_file = "/app/config/production.toml"
     else:
@@ -82,6 +83,7 @@ def load_dsn(config_file):
         config = toml.load(config_file)
         pg_dsn_settings = {
             "keybase": config["pg_dsn"]["keybase"],
+            "gnosis": config["pg_dsn"]["gnosis"],
         }
         return pg_dsn_settings
     except Exception as ex:
