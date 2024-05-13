@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-14 01:17:11
+LastEditTime: 2024-05-14 01:23:22
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -29,8 +29,8 @@ def gnosis_job():
 
 
 if __name__ == "__main__":
-    config = setting.load_settings(env="development")
-    # config = setting.load_settings(env="production")
+    # config = setting.load_settings(env="development")
+    config = setting.load_settings(env="production")
     if not os.path.exists(config["server"]["log_path"]):
         os.makedirs(config["server"]["log_path"])
     logger.InitLogger(config)
