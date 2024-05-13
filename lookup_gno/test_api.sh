@@ -10,5 +10,5 @@ curl -w "\nTime: %{time_total}s\n" http://localhost:22222/lookup/gno/0xFCEeC2491
 curl -w "\nTime: %{time_total}s\n" http://localhost:22222/lookup/gno/0xc9Af7BbEa391364e40FD6eBdE0e9911129d94905
 # {"domainName":"gnome.gno"} Time: 2.935862s
 
-curl -w "\nTime: %{time_total}s\n" http://localhost:22222/lookup/gno/0x6D910bEa79aAf318E7170C6fb8318D9c466B2164
+curl -w "\nTime: %{time_total}s\n" http://localhost:22222/lookup/gno/0x782d7ff7214d3d9cb7a9afaf3f45a8f80cb73482
 # {"domainName":"shiva.gno"} Time: 2.764978s

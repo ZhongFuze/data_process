@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:52:30
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 19:48:27
+LastEditTime: 2024-05-13 20:09:05
 FilePath: /data_process/src/service/gnosis_domains.py
 Description: gnosis transactions and domains fetcher
 '''
@@ -28,7 +28,7 @@ from model.gnosis_model import GnosisModel
 # https://gnosisscan.io/address/0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7
 
 GNS_REGISTRY = "0x5dc881dda4e4a8d312be3544ad13118d1a04cb17" 
-PUBLIC_RESOLVER = "0x6d4fc99d276c84e014535e3ef80837cb13ac5d26"
+PUBLIC_RESOLVER = "0x6d3b3f99177fb2a5de7f9e928a9bd807bf7b5bad"
 ERC1967_PROXY = "0xd7b837a0e388b4c25200983bdaa3ef3a83ca86b7"
 
 INITIALIZE_GENOME_BLOCK_NUMBER = 31502257
