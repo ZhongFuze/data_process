@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:51:10
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 17:57:12
+LastEditTime: 2024-05-13 19:28:43
 FilePath: /data_process/src/model/gnosis_model.py
 Description: get and set gnosis domain names
 '''
@@ -75,9 +75,10 @@ class GnosisModel():
         return response
 
     @sleep_and_retry
-    @limits(calls=600, period=60)
+    @limits(calls=5, period=1)
     def call_get(self, url):
         '''
+        API calls per second: 5 calls
         description: call_get
         '''
         headers = {
@@ -148,7 +149,7 @@ class GnosisModel():
             raise Exception("Gnosis API response logic failed: {}".format(resp))
         return resp
 
-    def get_transactions(self, start_block, end_block, page, offset):
+    def get_transactions(self, contract_address, start_block, end_block, page, offset):
         '''
         description: get_domains_by_address
             To get paginated results use page=<page number> and offset=<max records to return>
@@ -161,12 +162,12 @@ class GnosisModel():
         uri = "https://api.gnosisscan.io/api"
         uri += "?module=account"
         uri += "&action=txlist"
-        uri += "&address=0x6d3b3f99177fb2a5de7f9e928a9bd807bf7b5bad"  # PublicResolver
+        uri += "&address={}"  # PublicResolver or ERC1967Proxy
         uri += "&startblock={}&endblock={}&sort=asc"
         uri += "&page={}&offset={}"
         uri += "&apikey=ED5FB269AGSMIAHR97MNVFUG29HV9JAVC9"
 
-        url = uri.format(start_block, end_block, page, offset)
+        url = uri.format(contract_address, start_block, end_block, page, offset)
         result = []
         logging.info(url)
         try:
