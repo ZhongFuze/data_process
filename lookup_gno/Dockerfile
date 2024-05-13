@@ -1,6 +1,5 @@
-# Use the official Node.js 16 image.
-# https://hub.docker.com/_/node
-FROM node:16
+# hhttps://hub.docker.com/_/node
+FROM node:22
 
 LABEL maintainer="Zella Zhong <zella@mask.io>"
 
