@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-10 15:32:03
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 17:00:52
+LastEditTime: 2024-05-13 22:44:25
 FilePath: /data_process/src/script/msk_account_connection_to_nextid.py
 Description: nextid for account_connection data consumer
 '''
@@ -159,7 +159,7 @@ def _parse_create_msg(topic, create_msgs, cursor):
             logger.info("NXIDINFO: Duplicate key violation caught during upsert in {}".format(json.dumps(upsert_data)))
             raise ex
     else:
-        logging.info("NXIDINFO: No valid upsert_data to process.")
+        logger.info("NXIDINFO: No valid upsert_data to process.")
 
 
 

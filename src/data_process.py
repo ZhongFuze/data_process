@@ -4,16 +4,18 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 18:02:43
+LastEditTime: 2024-05-14 00:12:49
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
 import os
 import time
-
 import logging
-import setting
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+import setting
 import setting.filelogger as logger
 
 from service.ethereum_transactions import Fetcher as TransactionFetcher
@@ -24,8 +26,8 @@ from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 
 
 if __name__ == "__main__":
-    # config = setting.load_settings(env="development")
-    config = setting.load_settings(env="production")
+    config = setting.load_settings(env="development")
+    # config = setting.load_settings(env="production")
     if not os.path.exists(config["server"]["log_path"]):
         os.makedirs(config["server"]["log_path"])
     logger.InitLogger(config)
@@ -36,10 +38,14 @@ if __name__ == "__main__":
         # LensTransferFetcher().offline_dump("2022-08-22", "2022-10-28")
         # PolygonLensFetcher().offline_dump("2022-05-16", "2023-06-30")
         # PolygonLensFetcher().offline_dump_by_data_list(["2023-03-03"])
-        # GnosisDomainsFetcher().offline_dump()
+        scheduler = BackgroundScheduler()
+        cron_config = {"minute": "30", "second": "0"}
+        scheduler.add_job(GnosisDomainsFetcher().online_dump(), CronTrigger(**cron_config))
+        scheduler.start()
         while True:
             time.sleep(5)
             logging.info("just sleep for nothing")
     except (KeyboardInterrupt, SystemExit) as ex:
+        scheduler.shutdown()
         logging.exception(ex)
         print('Exit The Job!')

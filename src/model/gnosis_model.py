@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:51:10
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 19:28:43
+LastEditTime: 2024-05-13 23:55:47
 FilePath: /data_process/src/model/gnosis_model.py
 Description: get and set gnosis domain names
 '''
@@ -25,9 +25,9 @@ PAGE_LIMIT = 200
 MAX_RETRY_TIMES = 3
 
 QUERY_DOMAIN_BY_ADDRESS = """
-query domainsByAddr {
+query domainsByAddr($owner: String!, $first: Int!) {
   domains(
-    input: {owner: %s, first: %d}
+    input: {owner: $owner, first: $first, tldID: 14}
   ) {
     list {
       id
@@ -62,16 +62,14 @@ class GnosisModel():
         pass
 
     @sleep_and_retry
-    @limits(calls=600, period=60)
+    @limits(calls=50, period=60)
     def call_graphql(self, payload):
         '''call_api'''
-        url = "https://graphigo.prd.space.id"
+        url = "https://graphigo.prd.space.id/query"
         headers = {
-            "Accept-Encoding": "UTF-8",
             "Content-Type": "application/json; charset=utf-8",
-            "Accept": "application/json; charset=utf-8"
         }
-        response = requests.post(url=url, headers=headers, json={"query": payload}, timeout=30)
+        response = requests.post(url=url, headers=headers, data=payload, timeout=30)
         return response
 
     @sleep_and_retry
@@ -92,7 +90,7 @@ class GnosisModel():
                 response = requests.get(url=url, headers=headers, timeout=30)
                 if response.status_code != 200:
                     retry_times += 1
-                    logging.info("Gnosis API response failed, retry_times({}): {} {}".format(i, response.status_code, response.reason))
+                    logging.warn("Gnosis API response failed, retry_times({}): {} {}".format(i, response.status_code, response.reason))
                     resp["code"] = response.status_code
                     resp["msg"] = response.reason
                     time.sleep(3)
@@ -122,23 +120,23 @@ class GnosisModel():
                 error_msg = repr(ex)
                 if "Max retries exceeded" in error_msg:
                     retry_times += 1
-                    logging.info("Gnosis API max retry, retry_times({}): {} {}".format(i, response.status_code, response.reason))
+                    logging.error("Gnosis API max retry, retry_times({}): {} {}".format(i, response.status_code, response.reason))
                     resp["msg"] = "Max retries exceeded {}".format(ex)
                     time.sleep(10)
                 else:
-                    logging.info("Gnosis API other exception, {}".format(ex))
+                    logging.error("Gnosis API other exception, {}".format(ex))
                     resp["code"] = -1
                     resp["msg"] = error_msg
                     break
             except urllib3.exceptions.ReadTimeoutError as ex:
                 # retry
                 retry_times += 1
-                logging.info("Gnosis API timeout, retry_times({}): {} {}".format(i, response.status_code, response.reason))
+                logging.error("Gnosis API timeout, retry_times({}): {} {}".format(i, response.status_code, response.reason))
                 resp["code"] = -1
                 resp["msg"] = "ReadTimeoutError {}".format(ex)
                 time.sleep(10)
             except Exception as ex:
-                logging.info("Gnosis API other exception, {}".format(ex))
+                logging.error("Gnosis API other exception, {}".format(ex))
                 resp["code"] = -1
                 resp["msg"] = repr(ex)
                 break
@@ -148,6 +146,38 @@ class GnosisModel():
         if resp["code"] != 0:
             raise Exception("Gnosis API response logic failed: {}".format(resp))
         return resp
+
+    def lookup_reverse(self, address):
+        '''
+        description: lookup_reverse
+        curl -w "\nTime: %{time_total}s\n" http://localhost:22222/lookup/gno/address
+        return: {"domainName":"caronfire.gno"}
+        '''
+        resp = {"code": 0, "msg": ""}
+        url = "http://localhost:22222/lookup/gno/{}".format(address)
+        try:
+            response = requests.get(url=url, timeout=30)
+            if response.status_code != 200:
+                logging.error("lookup_gno response failed,".format(response.status_code, response.reason))
+                resp["code"] = response.status_code
+                resp["msg"] = response.reason
+            else:
+                content = json.loads(response.text)
+                if "domainName" in content:
+                    resp["code"] = 0
+                    resp["msg"] = ""
+                    resp["data"] = content
+                else:
+                    resp["code"] = -1
+                    resp["msg"] = "Invalid response"
+        except Exception as ex:
+            logging.error("lookup_gno has exception, {}".format(ex))
+            raise ex
+
+        if resp["code"] != 0:
+            raise Exception("lookup_gno response logic failed: {}".format(resp))
+
+        return resp["data"]
 
     def get_transactions(self, contract_address, start_block, end_block, page, offset):
         '''
@@ -169,7 +199,6 @@ class GnosisModel():
 
         url = uri.format(contract_address, start_block, end_block, page, offset)
         result = []
-        logging.info(url)
         try:
             resp = self.call_get(url)
             result.extend(resp["data"])
@@ -185,12 +214,18 @@ class GnosisModel():
         '''
         retry_times = 0
         resp = {"code": 0, "msg": ""}
-        addr = "\"{}\"".format(address)
-        req = QUERY_DOMAIN_BY_ADDRESS % (addr, PAGE_LIMIT)
+        payload = {
+            "query": QUERY_DOMAIN_BY_ADDRESS,
+                "operationName": "domainsByAddr",
+                "variables": {
+                    "owner": address,
+                    "first": PAGE_LIMIT
+                }
+        }
         for i in range(0, MAX_RETRY_TIMES):
-            response = self.call_graphql(req)
+            response = self.call_graphql(json.dumps(payload))
             if response.status_code != 200:
-                logging.info("SpaceId Graphql response failed, retry_times({}): {} {}".format(i, response.status_code, response.reason))
+                logging.warn("SpaceId Graphql response failed, retry_times({}): {} {}".format(i, response.status_code, response.reason))
                 resp["code"] = response.status_code
                 resp["msg"] = response.reason
                 retry_times += 1
