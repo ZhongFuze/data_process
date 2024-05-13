@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-10 15:32:03
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 02:28:05
+LastEditTime: 2024-05-13 17:00:52
 FilePath: /data_process/src/script/msk_account_connection_to_nextid.py
 Description: nextid for account_connection data consumer
 '''
@@ -128,6 +128,7 @@ def _parse_create_msg(topic, create_msgs, cursor):
     """
     # Prepare data for insertion, handling types and filtering invalid entries
     upsert_data = []
+    upsert_data_unique = {}
     for msg in create_msgs:
         account_id = str(msg["after"].get("account_id", "")).strip() if msg["after"].get("account_id") is not None else ""
         connection_id = str(msg["after"].get("connection_id", "")).strip() if msg["after"].get("connection_id") is not None else ""
@@ -135,19 +136,28 @@ def _parse_create_msg(topic, create_msgs, cursor):
         if not account_id or not connection_id:
             continue
 
-        connection_name = str(msg["after"].get("connection_name", ""))
-        connection_platform = str(msg["after"].get("connection_platform", ""))
-        wallet_addr = str(msg["after"].get("wallet_addr", ""))
-        data_source = "firefly" if msg["after"].get("data_source") == "maskx" else msg["after"].get("data_source")
+        unique_key = (account_id, connection_id)
+        if unique_key not in upsert_data_unique:
+            upsert_data_unique[unique_key] = True
 
-        upsert_data.append(
-            (connection_id, connection_name, connection_platform, account_id, wallet_addr, data_source, "create")
-        )
+            connection_name = str(msg["after"].get("connection_name", ""))
+            connection_platform = str(msg["after"].get("connection_platform", ""))
+            wallet_addr = str(msg["after"].get("wallet_addr", ""))
+            data_source = "firefly" if msg["after"].get("data_source") == "maskx" else msg["after"].get("data_source")
 
-    # Execute the batch insert/update if there's any data to process
+            upsert_data.append(
+                (connection_id, connection_name, connection_platform, account_id, wallet_addr, data_source, "create")
+            )
+        else:
+            logger.info("NXIDINFO: Duplicate key {}".format(unique_key))
+
     if upsert_data:
-        execute_values(cursor, sql_statement, upsert_data)
-        logger.info("NXIDINFO: Batch insert(upsert) completed for {} records.".format(len(upsert_data)))
+        try:
+            execute_values(cursor, sql_statement, upsert_data)
+            logger.info("NXIDINFO: Batch insert(upsert) completed for {} records.".format(len(upsert_data)))
+        except Exception as ex:
+            logger.info("NXIDINFO: Duplicate key violation caught during upsert in {}".format(json.dumps(upsert_data)))
+            raise ex
     else:
         logging.info("NXIDINFO: No valid upsert_data to process.")
 
@@ -421,6 +431,12 @@ def entry():
                 time.sleep(60)
             else:
                 kafka_msg_count += len(msgs)
+                logger.info("NXIDINFO: received {}".format(len(msgs)))
+                def do_convert_msg_to_obj():
+                    return run_job(msgs, cursor)
+
+                retry(func=do_convert_msg_to_obj, limit=3, wait_ms=500, logger=logger)
+                consumer.commit(message=msgs[-1], asynchronous=False)
 
     except Exception as ex:
         error_msg = traceback.format_exc()
