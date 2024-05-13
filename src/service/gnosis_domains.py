@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:52:30
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 20:09:05
+LastEditTime: 2024-05-13 20:10:52
 FilePath: /data_process/src/service/gnosis_domains.py
 Description: gnosis transactions and domains fetcher
 '''
@@ -100,7 +100,7 @@ class Fetcher():
                     PUBLIC_RESOLVER, start_block, end_block, page, offset))
             transactions = model.get_transactions(PUBLIC_RESOLVER, start_block, end_block, page, offset)
             if len(transactions) == 0:
-                logging.debug("No transactions({} block_id {}, {}) returns with paginated(page={}, offset={}).  ".format(
+                logging.debug("end fetch transactions({} block_id {}, {}) returns with paginated(page={}, offset={}).  ".format(
                     PUBLIC_RESOLVER, start_block, end_block, page, offset))
                 break
             tx_list.extend(transactions)
@@ -111,7 +111,7 @@ class Fetcher():
             logging.debug("get_transactions({} block_id {}, {}) (page={}, offset={}).  ".format(
                     ERC1967_PROXY, start_block, end_block, page, offset))
             if len(transactions) == 0:
-                logging.debug("No transactions({} block_id {}, {}) returns with paginated(page={}, offset={}).  ".format(
+                logging.debug("end fetch({} block_id {}, {}) returns with paginated(page={}, offset={}).  ".format(
                     PUBLIC_RESOLVER, start_block, end_block, page, offset))
                 break
             tx_list.extend(transactions)
