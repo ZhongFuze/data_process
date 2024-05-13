@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-14 00:35:24
+LastEditTime: 2024-05-14 00:41:38
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -26,8 +26,8 @@ from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 
 
 if __name__ == "__main__":
-    config = setting.load_settings(env="development")
-    # config = setting.load_settings(env="production")
+    # config = setting.load_settings(env="development")
+    config = setting.load_settings(env="production")
     if not os.path.exists(config["server"]["log_path"]):
         os.makedirs(config["server"]["log_path"])
     logger.InitLogger(config)
