@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-11-22 19:59:14
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-04 17:19:03
+LastEditTime: 2024-05-14 16:47:23
 FilePath: /data_process/src/data_server.py
 Description: 
 '''
@@ -14,6 +14,7 @@ import time
 import logging
 from controller.mydata_controller import MyDataController
 from controller.keybase_controller import KeybaseController
+from controller.genome_controller import GenomeController
 import setting
 
 import setting.filelogger as logger
@@ -33,6 +34,8 @@ if __name__ == "__main__":
             ["/data_server/mydata/myaction", MyDataController, "MyAction"],
             ["/data_server/mydata/postaction", MyDataController, "PostAction"],
             ["/data_server/keybase/proofs_summary", KeybaseController, "proofs_summary"],
+            ["/data_server/genome/get_name", GenomeController, "get_name"],
+            ["/data_server/genome/get_address", GenomeController, "get_address"],
         ]
         svr = httpsvr.HttpSvr(config, ctrl_info)
         svr.Start()
