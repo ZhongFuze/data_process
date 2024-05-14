@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:52:30
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 23:45:09
+LastEditTime: 2024-05-14 20:26:28
 FilePath: /data_process/src/service/gnosis_domains.py
 Description: gnosis transactions and domains fetcher
 '''
@@ -136,8 +136,8 @@ class Fetcher():
         for tx in tx_list:
             block_number = int(tx["blockNumber"])
             block_timestamp = int(tx["timeStamp"])
-            from_address = tx["from"]
-            to_address = tx["to"]
+            from_address = tx["from"].lower()
+            to_address = tx["to"].lower()
             tx_hash = tx["hash"]
             block_hash = tx["blockHash"]
             nonce = int(tx["nonce"])
@@ -145,7 +145,7 @@ class Fetcher():
             tx_value = tx["value"]
             is_error = bool(tx["isError"])
             txreceipt_status = int(tx["txreceipt_status"])
-            contract_address = tx["contractAddress"]
+            contract_address = tx["contractAddress"].lower()
             method_id = tx["methodId"]
             function_name = tx["functionName"]
             upsert_data.append(
@@ -203,7 +203,7 @@ class Fetcher():
             name = domain["name"]
             tld_id = int(domain["tld"]["tldID"])
             tld_name = domain["tld"]["tldName"]
-            owner = domain["owner"]
+            owner = domain["owner"].lower()
             expired_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(domain["expirationDate"])))
             is_default = False
             token_id = domain["tokenId"]
