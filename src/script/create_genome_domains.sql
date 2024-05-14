@@ -17,6 +17,10 @@ CREATE TABLE genome_domains (
 );
 
 CREATE INDEX idx_owner ON genome_domains (owner);
+CREATE INDEX idx_tld_owner ON genome_domains (tld_name, owner);
+CREATE INDEX idx_tld_name ON genome_domains (tld_name, name);
+CREATE INDEX idx_tld_owner_query ON genome_domains (tld_name, owner, delete_time);
+CREATE INDEX idx_tld_name_query ON genome_domains (tld_name, name, delete_time);
 
 {
 	'id': '14_1010915855723889042288748830868487681460570548751122716192574544312385431158',
