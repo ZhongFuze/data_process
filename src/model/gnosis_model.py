@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:51:10
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-13 23:55:47
+LastEditTime: 2024-05-16 14:19:21
 FilePath: /data_process/src/model/gnosis_model.py
 Description: get and set gnosis domain names
 '''
@@ -62,7 +62,7 @@ class GnosisModel():
         pass
 
     @sleep_and_retry
-    @limits(calls=50, period=60)
+    @limits(calls=20, period=60)
     def call_graphql(self, payload):
         '''call_api'''
         url = "https://graphigo.prd.space.id/query"
@@ -73,7 +73,7 @@ class GnosisModel():
         return response
 
     @sleep_and_retry
-    @limits(calls=5, period=1)
+    @limits(calls=4, period=1)
     def call_get(self, url):
         '''
         API calls per second: 5 calls

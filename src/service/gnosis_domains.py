@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:52:30
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-14 20:26:28
+LastEditTime: 2024-05-16 14:21:06
 FilePath: /data_process/src/service/gnosis_domains.py
 Description: gnosis transactions and domains fetcher
 '''
@@ -102,10 +102,9 @@ class Fetcher():
                 txreceipt_status = EXCLUDED.txreceipt_status,
                 update_time = CURRENT_TIMESTAMP;
             """
-        
         model = GnosisModel()
         maximum = 10000 # Returns up to a maximum of the last 10000 transactions only
-        offset = 200
+        offset = 1000
         batch = math.ceil(maximum / offset)
 
         tx_list = []
@@ -119,6 +118,7 @@ class Fetcher():
                     PUBLIC_RESOLVER, start_block, end_block, page, offset))
                 break
             tx_list.extend(transactions)
+            time.sleep(5)
 
         for page in range(1, batch + 1):
             # page number starts at 1
@@ -130,6 +130,7 @@ class Fetcher():
                     PUBLIC_RESOLVER, start_block, end_block, page, offset))
                 break
             tx_list.extend(transactions)
+            time.sleep(5)
 
         address_set = set()
         upsert_data = []
@@ -329,8 +330,16 @@ class Fetcher():
         logging.info("Gnosis online_fetch_genome_domains start at: {}".format(
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ss))))
         for address in address_list:
+            # sql_query = "SELECT count(*) AS cnt FROM genome_domains WHERE owner='%s'" % address
+            # cursor.execute(sql_query)
+            # result = cursor.fetchone()
+            # if result:
+            #     count = result[0]
+            #     if count > 0:
+            #         logging.info("genome_domains has {}({})".format(address, count))
+            #         continue
             self.genone_domains_worker(cursor, address)
-        
+            time.sleep(5)
         ee = time.time()
         delta = ee - ss
         logging.info("Gnosis online_fetch_genome_domains end at: {}".format(
@@ -377,12 +386,50 @@ class Fetcher():
         conn.autocommit = True
         cursor = conn.cursor()
 
-        start_block_number = INITIALIZE_GENOME_BLOCK_NUMBER
-        end_block_number = 33880631
+        # start_block_number = 31502257 ~ 31793845
+        # start_block_number = 33841583 ~ 33925332
+        # start_block_number = 31502257
+        # end_block_number = 31793845
+        start_block_number = 33876583
+        end_block_number = 33925332
+        # self.genone_domains_worker(cursor, address="0xe5cfe750d87dc62d9ebb5ffbd286307ef2c3d67e")
 
         start = time.time()
         logging.info("Gnosis transactions offline dump start at: {}".format(
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
+
+        # try:
+        #     address_list = ["0x770569f85346b971114e11e4bb5f7ac776673469", "0x7e87852b24271d9b1ceab796ad97d40562e4c7ae", "0x8330d58cc6458a1579f11f68e466829f1d19c78c", "0x88f1706c20d94a4d1551c5f799c9e3380a24c3ac", "0x8abb5d27447e3ddd8a0c7387c1f132e0e9b9b984", "0x8ce847c620487f3b639da9b9353ee7ffcb5ec2a7", "0x8cf7ffaa54718bdba047a8613c2a7799655d5491", "0x91b7377a3dd7931ad4757b60d7e859954b939e85", "0x92434c10f32e6e8bf16cbf7f19cccc1caabf09d6", "0x92e2e6553b7128cac300f65c98bd2341b80fd0f9", "0x94c8b2c5def39684b80c623eed518f1d0362dab6", "0x9565ba3c275d892d96557fd2b1e0dcce35c5c534", "0x99b2c7057b4828d1ee1706e05c04d1603b733656", "0x9aa150d72b1826f1e65ccfdee95da91125ed5f88", "0x9dc3f992637976ab1ebadbcb3fc3e6fe94a5c8f5", "0x9f8a742dc470653e186ecd00a303ed29a8b9cf7a", "0xad76cdf159c8039ea11d85e63f3c6abe96683ef8", "0xb25024c421d4f8bebe468d3dc353e07868c99901", "0xb5b2a6fbf04a3536d6c47da684ebdda383ff38ac", "0xbc8744370bcb6d5abf5de8b4086ecfbb4c5629c3", "0xbf15bd159ae5b410c4b7d4ae0230fb81f2f21cf1", "0xc74a73576f9ca7c88c905edcc5f0f5f339d52380", "0xd0c744d5540eecbe5a244a8895fc873dcc6a4231", "0xd45ea6930141ca83e94ff7d3d9a1fcd7c7388d90", "0xd7d7c959529b8967d356b5e01d488c2cd75dba42", "0xd8c27b82649dd803b81c0fba4ce94066d70207a4", "0xdc502e12488468e55ece3cbad60e0b5e288b2fb8", "0xe3d8e58551d240626d50ee26faff2649e1eee3cb", "0xe6b5a31d8bb53d2c769864ac137fe25f4989f1fd", "0xef18551a76b2738293587b2f82de738d276c8b60", "0xef97755f9d216235676615bcea0b61f816b47dca", "0xf039e5291859d1a0b1095a2840631e8ebc00ce14", "0xf13956b3bfff3b08b05d0eda9aac612b89e776cf", "0xf35b3c268abeac6965cee050461c50a163be736c", "0xf4dcac3825505e36551ed83d6665d5f4b49d4ed1", "0xf639374737baecaa34254011f4ae67365b8ec6e3", "0xfec208869b185c4f4dc08dc52349d1d0bb2bc03d"]
+
+        #     self.online_fetch_genome(cursor, address_list)
+        # except Exception as ex:
+        #     error_msg = traceback.format_exc()
+        #     logging.error("Gnosis transactions offline dump: Exception occurs error! {}".format(error_msg))
+        # finally:
+        #     cursor.close()
+        #     conn.close()
+
+        # try:
+        #     timesss = math.ceil((end_block_number - start_block_number) / 5000)
+        #     for ii in range(timesss):
+        #         start_block = start_block_number + (ii * 5000)
+        #         end_block = start_block_number + ((ii+1) * 5000)
+        #         address_list = self.process_transactions(cursor, start_block, end_block)
+        #         time.sleep(10)
+        #         end = time.time()
+        #         ts_delta = end - start
+        #         logging.info("Gnosis transactions offline dump end at: {}".format(
+        #                 time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
+        #         logging.info("Gnosis transactions online dump address: {}".format(len(address_list)))
+        #         logging.info("Gnosis transactions offline dump spends: {}".format(ts_delta))
+
+        #         # self.online_fetch_genome(cursor, address_list)
+        # except Exception as ex:
+        #     error_msg = traceback.format_exc()
+        #     logging.error("Gnosis transactions offline dump: Exception occurs error! {}".format(error_msg))
+        # finally:
+        #     cursor.close()
+        #     conn.close()
 
         try:
             address_list = self.process_transactions(cursor, start_block_number, end_block_number)
@@ -392,7 +439,6 @@ class Fetcher():
                     time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
             logging.info("Gnosis transactions online dump address: {}".format(len(address_list)))
             logging.info("Gnosis transactions offline dump spends: {}".format(ts_delta))
-
             self.online_fetch_genome(cursor, address_list)
         except Exception as ex:
             error_msg = traceback.format_exc()
