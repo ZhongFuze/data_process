@@ -1,0 +1,1 @@
+psql --host=data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com --port=5432 --username=postgres --dbname=nextid -c "COPY (select * from firefly_account_connection where connection_platform='twitter' and data_source='admin') TO STDOUT WITH CSV HEADER" > /Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/data/admin.csv
