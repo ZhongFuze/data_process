@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-20 16:33:42
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-20 21:17:12
+LastEditTime: 2024-05-21 15:42:44
 FilePath: /data_process/src/script/batch_update_admin_twitter.py
 Description: 
 '''
@@ -135,5 +135,66 @@ def process_admin_account():
         cursor.close()
         conn.close()
 
+def test_search():
+    conn = psycopg2.connect("postgresql://postgres:umeith6ahs9kahCh@data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com/nextid")
+    conn.autocommit = True
+    cursor = conn.cursor()
+    
+    '''
+    identity = "ozaveta"
+    ssql = """
+    SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source
+    FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
+        SELECT account_id FROM public.firefly_account_connection
+        WHERE
+            action!='delete' AND connection_platform='twitter' AND LOWER(connection_name) = '{}'
+    )
+    """.format(identity)
+    '''
+
+    '''
+    identity = "0x88a4febb4572cf01967e5ff9b6109dea57168c6d"
+    ssql = """
+    SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source
+    FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
+        SELECT account_id FROM public.firefly_account_connection
+        WHERE
+            action!='delete' AND LOWER(wallet_addr)='{}'
+    )
+    """.format(identity)
+    '''
+
+    '''
+    identity = "243466"
+    ssql = """
+    SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source
+    FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
+        SELECT account_id FROM public.firefly_account_connection
+        WHERE
+            action!='delete' AND connection_platform='farcaster' AND connection_id='{}'
+    )
+    """.format(identity)
+    '''
+    
+    # identity = "0x934b510d4c9103e6a87aef13b816fb080286d649"
+    # ssql = """
+    # SELECT address, twitter_username, instagram_username, twitter_is_verified, instagram_is_verified, created_at, updated_at
+    # FROM public.opensea_account WHERE address='{}'
+    # """.format(identity)
+    identity = "suji_yan"
+    ssql = """
+    SELECT address, twitter_username, instagram_username, twitter_is_verified, instagram_is_verified, created_at, updated_at
+    FROM public.opensea_account WHERE twitter_username='{}'
+    """.format(identity)
+    print(ssql)
+    cursor.execute(ssql)
+    rows = cursor.fetchall()
+    for row in rows:
+        print(row)
+        print(type(row[3]))
+    cursor.close()
+    conn.close()
+
 if __name__ == "__main__":
-    process_admin_account()
+    # process_admin_account()
+    test_search()

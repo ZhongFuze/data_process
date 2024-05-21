@@ -283,7 +283,7 @@ def InitLogger(config):
         logger.removeHandler(static_file_handler)
         static_file_handler.close()
         static_file_handler = None
-    
+
     if setting.Settings["env"] == "development":
         static_file_handler = FileHandler(config)
         static_file_handler.setLevel(logging.DEBUG)

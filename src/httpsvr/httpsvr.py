@@ -117,7 +117,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def __logReq(self):
         logging.info(self.request)
-        logging.debug(self.request.headers)
+        # logging.debug(self.request.headers)
 
     def __formatResp(self, path, resp):
         time_used = int((time.time() - self.start_time) * 1000)
