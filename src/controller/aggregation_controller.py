@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 14:08:13
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 16:13:25
+LastEditTime: 2024-05-21 19:58:36
 FilePath: /data_process/src/controller/aggregation_controller.py
 Description: 
 '''
@@ -92,7 +92,7 @@ class AggregationController(httpsvr.BaseController):
                             "is_verified": False,
                         }
                         if row["twitter_is_verified"] == 1:
-                            r["is_verified"] = False
+                            r["is_verified"] = True
                         data.append(r)
                     if row["instagram_username"] != "":
                         r = {
@@ -102,7 +102,7 @@ class AggregationController(httpsvr.BaseController):
                             "is_verified": False,
                         }
                         if row["instagram_is_verified"] == 1:
-                            r["is_verified"] = False
+                            r["is_verified"] = True
                         data.append(r)
         except Exception as e:
             code = -1
@@ -134,7 +134,7 @@ class AggregationController(httpsvr.BaseController):
             cursor = pg_conn.cursor()
             if platform == "twitter":
                 ssql = """
-                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, update_time
+                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, display_name, update_time
                 FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
                     SELECT account_id FROM public.firefly_account_connection
                     WHERE
@@ -145,7 +145,7 @@ class AggregationController(httpsvr.BaseController):
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
             elif platform == "ethereum":
                 ssql = """
-                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, update_time
+                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, display_name, update_time
                 FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
                     SELECT account_id FROM public.firefly_account_connection
                     WHERE
@@ -156,11 +156,11 @@ class AggregationController(httpsvr.BaseController):
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
             elif platform == "farcaster":
                 ssql = """
-                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, update_time
+                SELECT account_id, connection_id, connection_name, connection_platform, wallet_addr, data_source, display_name, update_time
                 FROM public.firefly_account_connection WHERE action!='delete' AND account_id = (
                     SELECT account_id FROM public.firefly_account_connection
                     WHERE
-                        action!='delete' AND connection_platform='farcaster' AND connection_id='{}'
+                        action!='delete' AND connection_platform='farcaster' AND connection_name='{}'
                 )
                 """.format(identity)
                 cursor.execute(ssql)
@@ -174,15 +174,19 @@ class AggregationController(httpsvr.BaseController):
                             "platform": "ethereum",
                             "identity": row["wallet_addr"].lower(),
                             "data_source": row["data_source"],
-                            "update_time": row["update_time"]
+                            "update_time": row["update_time"],
+                            "display_name": row["display_name"],
                         })
                     elif row["connection_platform"] == "farcaster":
+                        if row["connection_name"] == "":
+                            continue
                         data.append({
                             "account_id": row["account_id"],
                             "platform": "farcaster",
-                            "identity": row["connection_id"],
+                            "identity": row["connection_name"],
                             "data_source": row["data_source"],
-                            "update_time": row["update_time"]
+                            "update_time": row["update_time"],
+                            "display_name": row["display_name"],
                         })
                     elif row["connection_platform"] == "twitter":
                         if row["connection_name"] == "":
@@ -192,7 +196,8 @@ class AggregationController(httpsvr.BaseController):
                             "platform": "twitter",
                             "identity": row["connection_name"].lower(),
                             "data_source": row["data_source"],
-                            "update_time": row["update_time"]
+                            "update_time": row["update_time"],
+                            "display_name": row["display_name"],
                         })
             cursor.close()
             pg_conn.close()
