@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 19:36:51
+LastEditTime: 2024-05-21 19:48:35
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         # PolygonLensFetcher().offline_dump("2022-05-16", "2023-06-30")
         # PolygonLensFetcher().offline_dump_by_data_list(["2023-03-03"])
 
-        scheduler = BlockingScheduler()
+        scheduler = BackgroundScheduler()
         gnosis_trigger = CronTrigger(
             year="*", month="*", day="*", hour="*", minute="30", second="0"
         )
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         )
         scheduler.start()
         while True:
-            time.sleep(5)
+            time.sleep(60)
             logging.info("just sleep for nothing")
 
     except (KeyboardInterrupt, SystemExit) as ex:
