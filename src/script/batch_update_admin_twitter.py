@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-20 16:33:42
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-20 17:12:26
+LastEditTime: 2024-05-20 21:17:12
 FilePath: /data_process/src/script/batch_update_admin_twitter.py
 Description: 
 '''
@@ -33,7 +33,7 @@ import setting
 from script.flock import FileLock
 
 
-sub_datapath = "admin_2024-05-20"
+sub_datapath = "admin"
 opensea_account_data_dirs = os.path.join(setting.Settings["datapath"], "admin_twitter/%s" % sub_datapath)
 
 
