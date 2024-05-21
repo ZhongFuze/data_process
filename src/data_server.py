@@ -4,20 +4,20 @@
 Author: Zella Zhong
 Date: 2023-11-22 19:59:14
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-14 16:47:23
+LastEditTime: 2024-05-21 16:14:50
 FilePath: /data_process/src/data_server.py
 Description: 
 '''
 import os
-import time
-
 import logging
+
+import setting
+import setting.filelogger as logger
+
 from controller.mydata_controller import MyDataController
 from controller.keybase_controller import KeybaseController
 from controller.genome_controller import GenomeController
-import setting
-
-import setting.filelogger as logger
+from controller.aggregation_controller import AggregationController
 
 
 if __name__ == "__main__":
@@ -36,6 +36,8 @@ if __name__ == "__main__":
             ["/data_server/keybase/proofs_summary", KeybaseController, "proofs_summary"],
             ["/data_server/genome/get_name", GenomeController, "get_name"],
             ["/data_server/genome/get_address", GenomeController, "get_address"],
+            ["/data_server/aggregation/search", AggregationController, "search"],
+            ["/data_server/aggregation/opensea_account", AggregationController, "opensea_account"],
         ]
         svr = httpsvr.HttpSvr(config, ctrl_info)
         svr.Start()

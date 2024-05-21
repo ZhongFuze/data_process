@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-16 14:18:50
+LastEditTime: 2024-05-21 16:14:22
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -25,6 +25,7 @@ from service.crossbell_feeds import Fetcher as CrossbellFeedsFetcher
 from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 
 def gnosis_job():
+    logging.info("Starting gnosis online fetch job...")
     GnosisDomainsFetcher().online_dump()
 
 
