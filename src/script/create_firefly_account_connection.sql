@@ -10,3 +10,8 @@ CREATE TABLE firefly_account_connection (
     update_time TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_account_connection UNIQUE (account_id, connection_id)
 );
+
+
+CREATE INDEX idx_platform_name ON firefly_account_connection (connection_platform, connection_name);
+CREATE INDEX idx_wallet_addr ON firefly_account_connection (wallet_addr);
+CREATE INDEX idx_action ON firefly_account_connection (action);
