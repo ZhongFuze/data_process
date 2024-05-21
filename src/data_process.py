@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 16:14:22
+LastEditTime: 2024-05-21 18:34:15
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -23,10 +23,16 @@ from service.polygon_lens import Fetcher as PolygonLensFetcher
 from service.lens_transfer import Fetcher as LensTransferFetcher
 from service.crossbell_feeds import Fetcher as CrossbellFeedsFetcher
 from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
+from service.farcaster_name import Fetcher as FarcasterNameFetcher
 
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
     GnosisDomainsFetcher().online_dump()
+
+
+def firefly_farcaster_fname_job():
+    logging.info("Starting firefly_farcaster_fname online fetch job...")
+    FarcasterNameFetcher().online_dump()
 
 
 if __name__ == "__main__":
@@ -44,13 +50,22 @@ if __name__ == "__main__":
         # PolygonLensFetcher().offline_dump_by_data_list(["2023-03-03"])
 
         scheduler = BlockingScheduler()
-        trigger = CronTrigger(
+        gnosis_trigger = CronTrigger(
             year="*", month="*", day="*", hour="*", minute="30", second="0"
         )
         scheduler.add_job(
             gnosis_job,
-            trigger=trigger
+            trigger=gnosis_trigger
         )
+
+        fname_trigger = CronTrigger(
+            year="*", month="*", day="*", hour="19", minute="0", second="0"
+        )
+        scheduler.add_job(
+            firefly_farcaster_fname_job,
+            trigger=fname_trigger
+        )
+
         scheduler.start()
         while True:
             time.sleep(5)

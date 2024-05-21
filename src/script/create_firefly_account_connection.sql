@@ -15,3 +15,6 @@ CREATE TABLE firefly_account_connection (
 CREATE INDEX idx_platform_name ON firefly_account_connection (connection_platform, connection_name);
 CREATE INDEX idx_wallet_addr ON firefly_account_connection (wallet_addr);
 CREATE INDEX idx_action ON firefly_account_connection (action);
+
+ALTER TABLE public.firefly_account_connection
+ADD COLUMN display_name VARCHAR(255) DEFAULT '';
