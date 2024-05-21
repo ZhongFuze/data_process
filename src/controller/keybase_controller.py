@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-03-18 02:19:37
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-04 17:18:22
+LastEditTime: 2024-05-21 19:20:11
 FilePath: /data_process/src/controller/keybase_controller.py
 Description: 
 '''
@@ -55,7 +55,6 @@ class KeybaseController(httpsvr.BaseController):
                     WHERE keybase_username IN (SELECT keybase_username FROM keybase_proof WHERE platform='{}' AND username='{}')
                     """
                 cursor.execute(ssql.format(platform, username))
-                logging.debug(ssql.format(platform, username))
                 rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
                 cursor.close()
             pg_conn.close()

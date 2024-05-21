@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 19:11:44
+LastEditTime: 2024-05-21 19:36:51
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -12,7 +12,7 @@ import os
 import time
 import logging
 
-from apscheduler.schedulers.background import BlockingScheduler
+from apscheduler.schedulers.background import BlockingScheduler, BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import setting
@@ -55,17 +55,18 @@ if __name__ == "__main__":
         )
         scheduler.add_job(
             gnosis_job,
-            trigger=gnosis_trigger
+            trigger=gnosis_trigger,
+            id='gnosis_job'
         )
 
         fname_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="19", minute="20", second="0"
+            year="*", month="*", day="*", hour="12", minute="0", second="0"
         )
         scheduler.add_job(
             firefly_farcaster_fname_job,
-            trigger=fname_trigger
+            trigger=fname_trigger,
+            id='firefly_farcaster_fname_job'
         )
-
         scheduler.start()
         while True:
             time.sleep(5)
