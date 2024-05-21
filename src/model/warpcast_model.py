@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 17:59:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 18:18:16
+LastEditTime: 2024-05-21 20:39:51
 FilePath: /data_process/src/model/warpcast_model.py
 Description: get farcaster fid/fname/display_name profile for warpcast
 '''
@@ -71,7 +71,12 @@ class WarpcastModel(object):
                 # retry
                 resp["code"] = -1
                 error_msg = repr(ex)
-                if "Max retries exceeded" in error_msg:
+                if error_msg.find("MaxRetryError"):
+                    retry_times += 1
+                    logging.error("Warpcast API max retry, retry_times({}): {} {}".format(i, response.status_code, response.reason))
+                    resp["msg"] = "Max retries exceeded {}".format(ex)
+                    time.sleep(10)
+                elif "Max retries exceeded" in error_msg:
                     retry_times += 1
                     logging.error("Warpcast API max retry, retry_times({}): {} {}".format(i, response.status_code, response.reason))
                     resp["msg"] = "Max retries exceeded {}".format(ex)

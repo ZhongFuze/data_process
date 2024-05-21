@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 17:54:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 18:32:01
+LastEditTime: 2024-05-21 20:45:56
 FilePath: /data_process/src/service/farcaster_name.py
 Description: 
 '''
@@ -78,31 +78,33 @@ class Fetcher():
         try:
             model = WarpcastModel()
             account_list = self.get_all_farcaster_fid_from_db(cursor)
-            cnt = 0
-            update_data = []
-            for account in account_list:
-                fid = account["connection_id"]
-                warpcast_resp = model.user_by_fid(fid)
-                if "user" in warpcast_resp:
-                    fname = warpcast_resp["user"]["username"]
-                    display_name = warpcast_resp["user"]["displayName"]
-                    update_data.append({
-                        "account_id": account["account_id"],
-                        "connection_id": account["connection_id"],
-                        "connection_name": fname,
-                        "display_name": display_name
-                    })
-
-                cnt += 1
-                if cnt % 60 == 0:
-                    time.sleep(60)
-
-            logging.info("firefly-auth farcaster fname online dump accounts: {}".format(len(update_data)))
-            batch = math.ceil(len(update_data) / 200)
+            batch_size = 60
+            batch = math.ceil(len(account_list) / batch_size)
+            logging.info("All Batch({}) for fname online dump: All accounts: {}".format(batch, len(account_list)))
             for i in range(batch):
-                batch_update_data = update_data[i*200: (i+1)*200]
-                self.update_account_fname(cursor, batch_update_data)
+                batch_account_list = account_list[i*batch_size: (i+1)*batch_size]
+                update_data = []
+                for account in batch_account_list:
+                    fid = account["connection_id"]
+                    warpcast_resp = model.user_by_fid(fid)
+                    if "user" in warpcast_resp:
+                        userdata = warpcast_resp["user"]
+                        if "username" in userdata:
+                            fname = warpcast_resp["user"]["username"]
+                            display_name = ""
+                            if "display_name" in userdata:
+                                display_name = warpcast_resp["user"]["displayName"]
 
+                            update_data.append({
+                                "account_id": account["account_id"],
+                                "connection_id": account["connection_id"],
+                                "connection_name": fname,
+                                "display_name": display_name
+                            })
+
+                logging.info("Batch({})firefly-auth farcaster fname online dump accounts: {}".format(i, len(update_data)))
+                self.update_account_fname(cursor, update_data)
+                time.sleep(60)
             end = time.time()
             ts_delta = end - start
             logging.info("firefly-auth farcaster fname online dump end at: {}".format(
