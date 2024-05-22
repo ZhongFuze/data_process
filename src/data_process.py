@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 20:54:19
+LastEditTime: 2024-05-22 16:17:06
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         )
 
         fname_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="14", minute="00", second="0"
+            year="*", month="*", day="*", hour="8", minute="30", second="0"
         )
         scheduler.add_job(
             firefly_farcaster_fname_job,

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 17:54:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 20:45:56
+LastEditTime: 2024-05-22 16:16:03
 FilePath: /data_process/src/service/farcaster_name.py
 Description: 
 '''
@@ -92,7 +92,7 @@ class Fetcher():
                         if "username" in userdata:
                             fname = warpcast_resp["user"]["username"]
                             display_name = ""
-                            if "display_name" in userdata:
+                            if "displayName" in userdata:
                                 display_name = warpcast_resp["user"]["displayName"]
 
                             update_data.append({
