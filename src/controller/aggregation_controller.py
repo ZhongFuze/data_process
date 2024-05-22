@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 14:08:13
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 19:58:36
+LastEditTime: 2024-05-21 22:21:26
 FilePath: /data_process/src/controller/aggregation_controller.py
 Description: 
 '''
@@ -171,6 +171,7 @@ class AggregationController(httpsvr.BaseController):
                     if row["connection_platform"] == "wallet":
                         data.append({
                             "account_id": row["account_id"],
+                            "uid": "",
                             "platform": "ethereum",
                             "identity": row["wallet_addr"].lower(),
                             "data_source": row["data_source"],
@@ -182,6 +183,7 @@ class AggregationController(httpsvr.BaseController):
                             continue
                         data.append({
                             "account_id": row["account_id"],
+                            "uid": row["connection_id"],
                             "platform": "farcaster",
                             "identity": row["connection_name"],
                             "data_source": row["data_source"],
@@ -193,6 +195,7 @@ class AggregationController(httpsvr.BaseController):
                             continue
                         data.append({
                             "account_id": row["account_id"],
+                            "uid": row["connection_id"],
                             "platform": "twitter",
                             "identity": row["connection_name"].lower(),
                             "data_source": row["data_source"],
