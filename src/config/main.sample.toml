@@ -13,6 +13,7 @@ log_max_size = 1600
 keybase = "postgresql://postgres:password@host/dbname"
 gnosis = "postgresql://postgres:password@host/dbname"
 firefly = "postgresql://postgres:password@host/dbname"
+clusters = "postgresql://postgres:password@host/dbname"
 
 [datacloud_api]
 url = "https://api.chainbase.online/v1/dw/query"

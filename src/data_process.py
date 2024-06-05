@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-22 16:17:06
+LastEditTime: 2024-06-05 15:29:37
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -24,6 +24,7 @@ from service.lens_transfer import Fetcher as LensTransferFetcher
 from service.crossbell_feeds import Fetcher as CrossbellFeedsFetcher
 from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 from service.farcaster_name import Fetcher as FarcasterNameFetcher
+from service.clusters_name import Fetcher as ClustersNameFetcher
 
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
@@ -33,6 +34,11 @@ def gnosis_job():
 def firefly_farcaster_fname_job():
     logging.info("Starting firefly_farcaster_fname online fetch job...")
     FarcasterNameFetcher().online_dump()
+
+
+def clusters_name_job():
+    logging.info("Starting clusters_name_job online fetch job...")
+    ClustersNameFetcher().online_dump()
 
 
 if __name__ == "__main__":
@@ -60,13 +66,23 @@ if __name__ == "__main__":
         )
 
         fname_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="8", minute="30", second="0"
+            year="*", month="*", day="*", hour="18", minute="45", second="0"
         )
         scheduler.add_job(
             firefly_farcaster_fname_job,
             trigger=fname_trigger,
             id='firefly_farcaster_fname_job'
         )
+
+        clusters_trigger = CronTrigger(
+            year="*", month="*", day="*", hour="8", minute="0", second="0"
+        )
+        scheduler.add_job(
+            clusters_name_job,
+            trigger=clusters_trigger,
+            id='clusters_name_job'
+        )
+
         scheduler.start()
         while True:
             time.sleep(60)
