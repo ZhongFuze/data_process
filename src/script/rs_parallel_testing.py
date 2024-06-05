@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-28 13:52:29
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-28 14:40:21
+LastEditTime: 2024-06-03 16:47:26
 FilePath: /data_process/src/script/rs_parallel_testing.py
 Description: 
 '''
@@ -73,7 +73,8 @@ def runner(info):
                 "identity": identity
             }
     }
-    url = "http://127.0.0.1:3722"
+    # url = "http://127.0.0.1:3722"
+    url = "https://relation-service-tiger.next.id"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
     }
