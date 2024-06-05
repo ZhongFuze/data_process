@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-05 14:28:29
+LastEditTime: 2024-06-05 16:10:01
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -168,11 +168,14 @@ class Fetcher():
         all_count = 0
         batch_count = 0
         while True:
+            new_url = ""
             if next_page != "":
-                url = "{}?nextPage={}".format(url, next_page)
+                new_url = "{}?nextPage={}".format(url, next_page)
+            else:
+                new_url = url
 
             try:
-                resp = self.call_get(url)
+                resp = self.call_get(new_url)
                 next_page = resp.get("nextPage", "")
 
                 batch_count += 1
