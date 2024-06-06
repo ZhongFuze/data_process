@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-06 23:28:21
+LastEditTime: 2024-06-07 01:05:38
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -87,7 +87,10 @@ class Fetcher():
                             resp["total"] = len(content["items"])
 
                             if "nextPage" in content:
-                                resp["nextPage"] = content["nextPage"]
+                                if content["nextPage"] is None:
+                                    resp["nextPage"] = ""
+                                else:
+                                    resp["nextPage"] = content["nextPage"]
                             else:
                                 resp["nextPage"] = ""
                         else:
@@ -187,19 +190,18 @@ class Fetcher():
             limited to the first 1,000 rows.
         '''
         url = "https://api.clusters.xyz/v0.1/updates/addresses"
-        next_page = ""
+        fromTimestamp = 0
         all_count = 0
         batch_count = 0
         while True:
             new_url = ""
-            if next_page != "":
-                new_url = "{}?nextPage={}".format(url, next_page)
+            if fromTimestamp != 0:
+                new_url = "{}?fromTimestamp={}".format(url, fromTimestamp)
             else:
                 new_url = url
 
             try:
                 resp = self.call_get(new_url)
-                next_page = resp.get("nextPage", "")
 
                 batch_count += 1
                 all_count += resp["total"]
@@ -207,6 +209,8 @@ class Fetcher():
                     batch_count, resp["total"], all_count))
 
                 self.upsert_clusters_to_db(cursor, resp["data"])
+                fromTimestamp = resp["data"][-1]["updatedAt"]
+                fromTimestamp += 1
                 if resp["nextPage"] == "" and batch_count > 0:
                     break
                 if resp["total"] < PAGE_LIMIT:

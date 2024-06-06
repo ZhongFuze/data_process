@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-05 14:04:22
+LastEditTime: 2024-06-06 23:49:35
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -56,8 +56,8 @@ def load_settings(env="test"):
     if env == "testing":
         config_file = "/app/config/testing.toml"
     elif env == "development":
-        # config_file = "./config/development.toml"
-        config_file = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src/config/development.toml"
+        config_file = "./config/development.toml"
+        # config_file = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src/config/development.toml"
     elif env == "production":
         config_file = "/app/config/production.toml"
     else:
