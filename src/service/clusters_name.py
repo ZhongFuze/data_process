@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-06 19:37:16
+LastEditTime: 2024-06-06 23:28:21
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -36,6 +36,18 @@ class Fetcher():
     def __init__(self):
         pass
     
+    def get_name(self, address):
+        url = "https://api.clusters.xyz/v0.1/name/%s" % address
+        response = requests.get(url=url, timeout=30)
+        if response.status_code != 200:
+            logging.warn("Clusters API response failed: url={}, {} {}".format(url, response.status_code, response.reason))
+            return None
+
+        raw_text = response.text
+        if raw_text == "null":
+            return None
+        return raw_text
+
     @sleep_and_retry
     @limits(calls=60, period=60)
     def call_get(self, url):
@@ -144,8 +156,13 @@ class Fetcher():
                 logging.debug("item's clusterName is None: {}".format(json.dumps(item)))
                 continue
             if name is None:
-                logging.debug("item's name is None: {}".format(json.dumps(item)))
-                continue
+                logging.debug("item's name is None, call cluster/v0.1/name/address to find")
+                _name = self.get_name(address)
+                if _name is None:
+                    logging.debug("item's name is None: {}".format(json.dumps(item)))
+                    continue
+                name = _name
+
             isVerified = item["isVerified"]
             updatedAt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(item["updatedAt"])))
             upsert_data.append(
@@ -166,8 +183,8 @@ class Fetcher():
         '''
         description: 
             Get a list of addresses that are using Clusters with their associated name. 
-            The list is in ascending order from oldest to most recent and limited to the first 1,000 rows.
-        return {*}
+            The list is in ascending order from oldest to most recent and 
+            limited to the first 1,000 rows.
         '''
         url = "https://api.clusters.xyz/v0.1/updates/addresses"
         next_page = ""
