@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-05 16:10:01
+LastEditTime: 2024-06-06 19:37:16
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -128,7 +128,7 @@ class Fetcher():
             isVerified,
             updatedAt
         ) VALUES %s
-        ON CONFLICT (address, name)
+        ON CONFLICT (address, clusterName, name)
         DO UPDATE SET
             isVerified = EXCLUDED.isVerified,
             updatedAt = EXCLUDED.updatedAt;
@@ -140,6 +140,12 @@ class Fetcher():
             address_type = item["type"]
             clusterName = item["clusterName"]
             name = item["name"]
+            if clusterName is None:
+                logging.debug("item's clusterName is None: {}".format(json.dumps(item)))
+                continue
+            if name is None:
+                logging.debug("item's name is None: {}".format(json.dumps(item)))
+                continue
             isVerified = item["isVerified"]
             updatedAt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(item["updatedAt"])))
             upsert_data.append(
