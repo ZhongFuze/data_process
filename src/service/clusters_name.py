@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-07 01:05:38
+LastEditTime: 2024-06-07 18:01:05
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -155,9 +155,13 @@ class Fetcher():
             address_type = item["type"]
             clusterName = item["clusterName"]
             name = item["name"]
-            if clusterName is None:
-                logging.debug("item's clusterName is None: {}".format(json.dumps(item)))
+            if address_type is None:
                 continue
+            if address == "":
+                continue
+            if clusterName is None:
+                continue
+
             if name is None:
                 logging.debug("item's name is None, call cluster/v0.1/name/address to find")
                 _name = self.get_name(address)
@@ -193,6 +197,7 @@ class Fetcher():
         fromTimestamp = 0
         all_count = 0
         batch_count = 0
+        max_batch_limit = 65536
         while True:
             new_url = ""
             if fromTimestamp != 0:
@@ -219,6 +224,12 @@ class Fetcher():
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 logging.error("Fetch clusters: Exception occurs error! {}".format(error_msg))
+                batch_count += 1
+
+            if batch_count > max_batch_limit:
+                logging.info("Fetch clusters batch=({}) > max_limit({}), all_count={}, exit loop".format(
+                    batch_count, max_batch_limit, all_count))
+                break
 
     def online_dump(self):
         '''

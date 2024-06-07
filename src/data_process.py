@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-07 01:06:24
+LastEditTime: 2024-06-07 18:01:34
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         )
 
         clusters_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="17", minute="15", second="0"
+            year="*", month="*", day="*", hour="10", minute="10", second="0"
         )
         scheduler.add_job(
             clusters_name_job,
