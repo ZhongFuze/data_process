@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-07 18:01:05
+LastEditTime: 2024-06-11 15:21:34
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -137,6 +137,7 @@ class Fetcher():
         sql_statement = """INSERT INTO public.clusters_name (
             bytes32Address,
             address,
+            platform,
             type,
             clusterName,
             name,
@@ -162,6 +163,32 @@ class Fetcher():
             if clusterName is None:
                 continue
 
+            platform = ""
+            if address_type == "aptos":
+                platform = "aptos"
+            elif address_type == "evm":
+                platform = "ethereum"
+            elif address_type == "solana":
+                platform = "solana"
+            elif address_type == "dogecoin":
+                platform = "doge"
+            elif address_type == "near":
+                platform = "near"
+            elif address_type == "stacks":
+                platform = "stacks"
+            elif address_type == "tron":
+                platform = "tron"
+            elif address_type == "ripple-classic":
+                platform = "xrpc"
+            elif address_type.find("bitcoin") == -1:
+                platform = "bitcoin"
+            elif address_type.find("cosmos") == -1:
+                platform = "cosmos"
+            elif address_type.find("litecoin") == -1:
+                platform = "litecoin"
+            else:
+                platform = "unknown"
+
             if name is None:
                 logging.debug("item's name is None, call cluster/v0.1/name/address to find")
                 _name = self.get_name(address)
@@ -173,7 +200,7 @@ class Fetcher():
             isVerified = item["isVerified"]
             updatedAt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(item["updatedAt"])))
             upsert_data.append(
-                (bytes32Address, address, address_type, clusterName, name, isVerified, updatedAt)
+                (bytes32Address, address, platform, address_type, clusterName, name, isVerified, updatedAt)
             )
 
         if upsert_data:

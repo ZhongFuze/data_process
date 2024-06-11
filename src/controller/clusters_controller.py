@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-06 15:17:04
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-07 01:04:59
+LastEditTime: 2024-06-11 15:31:51
 FilePath: /data_process/src/controller/clusters_controller.py
 Description: 
 '''
@@ -45,8 +45,12 @@ class ClustersController(httpsvr.BaseController):
             pg_conn = get_conn()
             cursor = pg_conn.cursor()
             ssql = """
-                SELECT address, type, clustername, name, isverified, updatedat
-                FROM public.clusters_name WHERE address='{}' clusterName is not null AND isverified=true
+                SELECT address, platform, clustername, name, isverified, updatedat
+                FROM public.clusters_name
+                WHERE clustername = (
+                    SELECT clustername
+                    FROM public.clusters_name WHERE address='{}' AND clustername is not null AND isverified=true
+                ) AND isverified=true
             """
             cursor.execute(ssql.format(address))
             # logging.debug(ssql.format(address))
@@ -75,12 +79,12 @@ class ClustersController(httpsvr.BaseController):
         ssql = ""
         if name.find("/") != -1:
             cluster_name = name.split("/")[0]
-            ssql += """SELECT address, type, clustername, name, isverified, updatedat FROM public.clusters_name
+            ssql += """SELECT address, platform, clustername, name, isverified, updatedat FROM public.clusters_name
                     WHERE clustername='{}' AND isverified=true
             """
             ssql = ssql.format(cluster_name)
         else:
-            ssql += """SELECT address, type, clustername, name, isverified, updatedat FROM public.clusters_name
+            ssql += """SELECT address, platform, clustername, name, isverified, updatedat FROM public.clusters_name
                     WHERE clustername='{}' AND isverified=true
             """
             ssql = ssql.format(name)

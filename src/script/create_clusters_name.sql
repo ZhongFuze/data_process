@@ -2,6 +2,7 @@ CREATE TABLE clusters_name (
     id SERIAL PRIMARY KEY,
     bytes32Address VARCHAR(255) NOT NULL,
     address VARCHAR(255) NOT NULL,
+    platform VARCHAR(255) NOT NULL,
     type VARCHAR(255) NOT NULL,
     clusterName VARCHAR(255) NOT NULL,
     name VARCHAR(255),
