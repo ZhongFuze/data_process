@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-11 15:21:34
+LastEditTime: 2024-06-25 17:55:20
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -156,6 +156,9 @@ class Fetcher():
             address_type = item["type"]
             clusterName = item["clusterName"]
             name = item["name"]
+            if clusterName == "opengamer":
+                logging.error("item: {}".format(json.dumps(item)))
+                continue
             if address_type is None:
                 continue
             if address == "":
@@ -198,6 +201,8 @@ class Fetcher():
                 name = _name
 
             isVerified = item["isVerified"]
+            if isVerified is False:
+                continue
             updatedAt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(item["updatedAt"])))
             upsert_data.append(
                 (bytes32Address, address, platform, address_type, clusterName, name, isVerified, updatedAt)
