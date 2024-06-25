@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-25 17:55:20
+LastEditTime: 2024-06-25 21:57:35
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -19,7 +19,7 @@ import traceback
 import requests
 import urllib3
 import psycopg2
-
+from datetime import datetime
 
 from web3 import Web3
 from psycopg2.extras import execute_values, execute_batch
@@ -30,6 +30,18 @@ import setting
 
 MAX_RETRY_TIMES = 3
 PAGE_LIMIT = 1000
+
+
+def dict_factory(cursor, row):
+    """
+    Convert query result to a dictionary.
+    """
+    col_names = [col_desc[0] for col_desc in cursor.description]
+    row_dict = dict(zip(col_names, row))
+    for key, value in row_dict.items():
+        if isinstance(value, datetime):
+            row_dict[key] = int(value.timestamp())
+    return row_dict
 
 
 class Fetcher():
@@ -47,6 +59,17 @@ class Fetcher():
         if raw_text == "null":
             return None
         return raw_text
+
+    def bulk_get_names(self, addresses):
+        url = "http://api.clusters.xyz/v0.1/name/addresses"
+        payload = json.dumps(addresses)
+        response = requests.post(url=url, data=payload, timeout=30)
+        if response.status_code != 200:
+            logging.warn("Clusters API response failed: url={}, {} {}".format(url, response.status_code, response.reason))
+            return None
+        raw_text = response.text
+        res = json.loads(raw_text)
+        return res
 
     @sleep_and_retry
     @limits(calls=60, period=60)
@@ -198,6 +221,7 @@ class Fetcher():
                 if _name is None:
                     logging.debug("item's name is None: {}".format(json.dumps(item)))
                     continue
+                _name = _name.strip("\"")
                 name = _name
 
             isVerified = item["isVerified"]
@@ -217,6 +241,73 @@ class Fetcher():
                 raise ex
         else:
             logging.debug("No valid create_data to process.")
+
+    def supplement_correction(self, cursor):
+        '''supplement_correction'''
+        ssql = """
+            SELECT address, platform, clustername, name, isverified, updatedat
+            FROM public.clusters_name
+            WHERE clustername IN (
+                SELECT clustername
+                FROM public.clusters_name
+                WHERE isverified = true
+                GROUP BY clustername
+                HAVING COUNT(*) > 1
+            ) AND isverified = true
+        """
+
+        update_sql = """
+            UPDATE public.clusters_name
+            SET
+                clustername = %(clustername)s,
+                name = %(name)s
+            WHERE 
+                address = %(address)s
+        """
+        cursor.execute(ssql)
+        rows = [dict_factory(cursor, row) for row in cursor.fetchall()]
+
+        update_data = []
+        delete_addresses = []
+        addresses = []
+        for row in rows:
+            addresses.append(row["address"])
+
+        bulk_names = self.bulk_get_names(addresses)
+        for item in bulk_names:
+            if item["name"] is None:
+                # delete the row
+                delete_addresses.append(item["address"])
+            else:
+                correct_name = item["name"]
+                cluster_name = correct_name.split("/")[0]
+                update_data.append({
+                    "clustername": cluster_name,
+                    "name": correct_name,
+                    "address": item["address"]
+                })
+        if update_data:
+            try:
+                execute_batch(cursor, update_sql, update_data)
+                logging.info("Batch update completed for {} records.".format(len(update_data)))
+            except Exception as ex:
+                logging.error("Caught exception during update in {}".format(json.dumps(update_data)))
+                raise ex
+        else:
+            logging.debug("No valid update_data to process.")
+
+        if delete_addresses:
+            try:
+                delete_sql = "DELETE FROM public.clusters_name WHERE address IN (%s)"
+                delete_ids = ["'" + x + "'" for x in delete_addresses]
+                delete_ssql = delete_sql % ",".join(delete_ids)
+                cursor.execute(delete_ssql)
+                logging.info("Batch delete completed for {} records.".format(len(delete_ids)))
+            except Exception as ex:
+                logging.error("Caught exception during delete in {}".format(json.dumps(delete_ids)))
+                raise ex
+        else:
+            logging.debug("No valid delete_ids to process.")
 
     def fetch_clusters(self, cursor):
         '''
@@ -282,6 +373,9 @@ class Fetcher():
             logging.info("Fetch clusters online dump end at: {}".format(
                     time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
             logging.info("Fetch clusters online dump spends: {}".format(ts_delta))
+
+            # Supplement correction
+            self.supplement_correction(cursor)
         except Exception as ex:
             error_msg = traceback.format_exc()
             logging.error("Fetch clusters online dump: Exception occurs error! {}".format(error_msg))
