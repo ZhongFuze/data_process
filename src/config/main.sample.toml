@@ -19,13 +19,13 @@ clusters = "postgresql://postgres:password@host/dbname"
 url = "https://api.chainbase.online/v1/dw/query"
 api_key = "123456abcdefgh6789abcdefgh"
 
+[chainbase_api]
+url = "https://api.chainbase.com/api/v1"
+api_key = "123456abcdefgh6789abcdefgh"
+
 [crossbell_api]
 graphql = "https://indexer.crossbell.io/v1/graphql"
 api = "https://indexer.crossbell.io/v1"
-
-[path]
-datapath = "your_data_save_path"
-logpath = "your_log_save_path"
 
 [rpc_url]
 polygon = "https://rpc-mainnet.maticvigil.com"
