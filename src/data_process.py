@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-25 21:58:39
+LastEditTime: 2024-07-15 21:19:25
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -25,6 +25,7 @@ from service.crossbell_feeds import Fetcher as CrossbellFeedsFetcher
 from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 from service.farcaster_name import Fetcher as FarcasterNameFetcher
 from service.clusters_name import Fetcher as ClustersNameFetcher
+from service.ens_txlogs import Fetcher as ENSLogFetcher
 
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
@@ -39,6 +40,13 @@ def firefly_farcaster_fname_job():
 def clusters_name_job():
     logging.info("Starting clusters_name_job online fetch job...")
     ClustersNameFetcher().online_dump()
+
+
+def ens_txlogs_offline_fetch():
+    start_date = "2020-02-04"
+    end_date = "2020-12-31"
+    logging.info("Starting ens_txlogs_offline_fetch job...")
+    ENSLogFetcher().offline_dump(start_date, end_date)
 
 
 if __name__ == "__main__":
@@ -82,8 +90,9 @@ if __name__ == "__main__":
             trigger=clusters_trigger,
             id='clusters_name_job'
         )
-
         scheduler.start()
+
+        ens_txlogs_offline_fetch()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

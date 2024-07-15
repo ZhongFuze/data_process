@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-06 23:49:35
+LastEditTime: 2024-07-15 20:52:39
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -24,6 +24,11 @@ Settings = {
 }
 
 DATACLOUD_SETTINGS = {
+    "url": "",
+    "api_key": "",
+}
+
+CHAINBASE_SETTINGS = {
     "url": "",
     "api_key": "",
 }
@@ -48,6 +53,7 @@ def load_settings(env="test"):
     """
     global Settings
     global DATACLOUD_SETTINGS
+    global CHAINBASE_SETTINGS
     global RPC_SETTINGS
     global CROSSBELL_SETTINGS
     global PG_DSN
@@ -67,6 +73,7 @@ def load_settings(env="test"):
     Settings["env"] = env
     Settings["datapath"] = os.path.join(config["server"]["work_path"], "data")
     DATACLOUD_SETTINGS = load_datacloud_settings(config_file)
+    CHAINBASE_SETTINGS = load_chainbase_settings(config_file)
     CROSSBELL_SETTINGS = load_crossbell_settings(config_file)
     RPC_SETTINGS = load_rpc_settings(config_file)
     PG_DSN = load_dsn(config_file)
@@ -103,6 +110,23 @@ def load_datacloud_settings(config_file):
         datacloud_settings = {
             "url": config["datacloud_api"]["url"],
             "api_key": config["datacloud_api"]["api_key"],
+        }
+        return datacloud_settings
+    except Exception as ex:
+        logging.exception(ex)
+
+
+def load_chainbase_settings(config_file):
+    """
+    @description: load chainbase auth configurations
+    @params: config_file
+    @return chainbase_settings
+    """
+    try:
+        config = toml.load(config_file)
+        datacloud_settings = {
+            "url": config["chainbase_api"]["url"],
+            "api_key": config["chainbase_api"]["api_key"],
         }
         return datacloud_settings
     except Exception as ex:
