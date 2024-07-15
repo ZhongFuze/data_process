@@ -30,3 +30,7 @@ BEGIN;
 TRUNCATE TABLE public.clusters_name;
 ALTER SEQUENCE public.clusters_name_id_seq RESTART WITH 1;
 COMMIT;
+
+UPDATE clusters_name
+SET name = REPLACE(name, '"', '')
+WHERE name LIKE '%"%';
