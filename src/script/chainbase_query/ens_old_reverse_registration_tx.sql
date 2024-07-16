@@ -1,0 +1,1 @@
+SELECT block_number, block_timestamp, hash, nonce, transaction_index, from_address, to_address, method_id, transaction_type, input, receipt_status FROM ethereum.transactions WHERE block_timestamp >= TIMESTAMP '{{start_time}}' AND block_timestamp < TIMESTAMP '{{end_time}}' AND to_address = '0x084b1c3c81545d370f3634392de611caabff8148' OFFSET {{custom_offset}} LIMIT {{custom_limit}}

@@ -1,0 +1,1 @@
+SELECT * FROM ethereum.transaction_logs_decoded WHERE block_timestamp >= TIMESTAMP '{{start_time}}' AND block_timestamp < TIMESTAMP '{{end_time}}' AND contract_address = '0x283af0b28c62c092c9727f1ee09c02ca627eb7f5' OFFSET {{custom_offset}} LIMIT {{custom_limit}}
