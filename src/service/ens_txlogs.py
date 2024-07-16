@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-15 21:07:43
+LastEditTime: 2024-07-16 17:24:06
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -88,7 +88,7 @@ def fetch_txlogs_with_retry(params):
 
     status = None
     progress = None
-    max_times = 10
+    max_times = 20
     sleep_second = 15
     cnt = 0
 
@@ -132,7 +132,7 @@ def count_txlogs_with_retry(params):
 
     status = None
     progress = None
-    max_times = 10
+    max_times = 20
     sleep_second = 15
     cnt = 0
 
@@ -174,7 +174,7 @@ def count_txlogs_with_retry(params):
 
 def fetch_txlogs_by_params(params):
     # {"code":200, "data":[{"executionId":"8af59ce6a9121f07bc1474bb2a081b3c", "status":"PENDING", "queueLength":"0"}], "message":"success"}
-    # execution_id = "8af59ce6a9121f07bc1474bb2a081b3c"
+    # execution_id = "7befd12d4033f224c2a6f4805be9200e"
     execution_id = execute_query(LIST_LOGS_QUERY_ID, params)
     status = None
     progress = None
@@ -383,20 +383,20 @@ class Fetcher():
 
 
 if __name__ == "__main__":
-    # data = {
-    #     "queryParameters": {
-    #         "start_time":"2024-07-10 00:00:00",
-    #         "end_time":"2024-07-11 00:00:00",
-    #         "custom_offset":"0",
-    #         "custom_limit":"1000"
-    #     }
-    # }
-
     data = {
         "queryParameters": {
             "start_time":"2024-07-10 00:00:00",
-            "end_time":"2024-07-11 00:00:00"
+            "end_time":"2024-07-11 00:00:00",
+            "custom_offset":"0",
+            "custom_limit":"1000"
         }
     }
-    result = count_txlogs_by_params(data)
+
+    # data = {
+    #     "queryParameters": {
+    #         "start_time":"2024-07-10 00:00:00",
+    #         "end_time":"2024-07-11 00:00:00"
+    #     }
+    # }
+    result = fetch_txlogs_by_params(data)
     print(result)
