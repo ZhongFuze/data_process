@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-17 02:47:54
+LastEditTime: 2024-07-17 17:54:04
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -60,8 +60,13 @@ LABEL_MAP = {
 
 def decoded_reverse_registry_input(hex_data):
     trim_data = hex_data[10:] # MethodID
+    if trim_data[0:64] == '' or len(trim_data[0:64]) == 0:
+        return hex_data
+    if trim_data[64:128] == '' or len(trim_data[64:128]) == 0:
+        return hex_data
+
     offset = int(trim_data[0:64], 16)
-    length = int(trim_data[64:128], 16)
+    length = int(trim_data[64:128], 16)  # ValueError("invalid literal for int() with base 16: ''")
     start = 128
     string_data_hex = trim_data[start:start+length*2]
     string_data_bytes = binascii.unhexlify(string_data_hex)
@@ -121,9 +126,9 @@ def fetch_results_with_retry(query_id, params):
                 time.sleep(sleep_second)
 
             if status == "FAILED":
-                raise Exception(f"Chainbase check_status[{status}], progress[{progress}]")
+                raise Exception(f"Chainbase execution_id[{execution_id}] check_status[{status}], progress[{progress}]")
             if cnt >= max_times:
-                raise Exception(f"Chainbase check_status timeout({sleep_second * max_times})")
+                raise Exception(f"Chainbase execution_id[{execution_id}] check_status timeout({sleep_second * max_times})")
 
             time.sleep(2)
             results = get_results(execution_id)
@@ -133,7 +138,7 @@ def fetch_results_with_retry(query_id, params):
             error_msg = repr(ex)
             if "Max retries exceeded" in error_msg:
                 retry_times += 1
-                logging.error("Chainbase API, retry_times({}): Max retries exceeded, Sleep 10s".format(i))
+                logging.error("Chainbase execution_id[{}] retry_times({}): Max retries exceeded, Sleep 10s".format(execution_id, i))
                 time.sleep(10)
             else:
                 raise ex
@@ -459,7 +464,7 @@ class Fetcher():
                     query_row_count = record_result["data"].get("total_row_count", 0)
                     query_ts = record_result["data"].get("execution_time_millis", 0)
                     line_prefix = "Loading ens_old_reverse_registration_txlogs[{}], execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
-                        date, query_execution_id, old_registrar_controller_count, offset, query_row_count, query_ts / 1000)
+                        date, query_execution_id, old_reverse_count, offset, query_row_count, query_ts / 1000)
                     logging.info(line_prefix)
 
                     if "data" in record_result["data"]:
