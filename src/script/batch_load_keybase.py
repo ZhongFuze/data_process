@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-02-01 16:43:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-25 01:16:59
+LastEditTime: 2024-07-18 18:55:22
 FilePath: /data_process/src/script/batch_load_keybase.py
 Description: prepare loading keybase follow data to db.
 '''
@@ -376,9 +376,8 @@ def runner(info):
     from_id = info["from_id"]
     json_raw = info["json_raw"]
     try:
-        upsert_url = "http://ec2-16-162-55-226.ap-east-1.compute.amazonaws.com:9000/query/SocialGraph/upsert_hyper_vertex"
+        upsert_url = "http://hostname/query/SocialGraph/upsert_hyper_vertex"
         headers = {
-            # "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
             "Content-Type": "application/json; charset=utf-8",
         }
         response = requests.post(
@@ -415,9 +414,8 @@ def upsert_isolated_vertex(info):
     isolated_id = info["isolated_id"]
     json_raw = info["json_raw"]
     try:
-        upsert_url = "http://ec2-16-162-55-226.ap-east-1.compute.amazonaws.com:9000/query/SocialGraph/upsert_isolated_vertex"
+        upsert_url = "http://hostname/query/SocialGraph/upsert_isolated_vertex"
         headers = {
-            # "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
             "Content-Type": "application/json; charset=utf-8",
         }
         response = requests.post(
