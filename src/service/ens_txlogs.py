@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-18 16:19:04
+LastEditTime: 2024-07-18 18:51:38
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -647,6 +647,7 @@ class Fetcher():
         '''
         description: loadings data split by date between start and end
         '''
+        headers["x-api-key"] = setting.CHAINBASE_SETTINGS["api_key"]
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
         dates = self.date_range(start_date, end_date)
         for date in dates:

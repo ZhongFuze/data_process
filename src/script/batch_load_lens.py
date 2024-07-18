@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-01-15 21:15:39
 LastEditors: Zella Zhong
-LastEditTime: 2024-02-01 17:54:11
+LastEditTime: 2024-07-18 18:49:46
 FilePath: /data_process/src/script/batch_load_lens.py
 Description: prepare loading lens follow data to db.
 '''
@@ -217,9 +217,8 @@ def runner(info):
     to_id = info["to_id"]
     json_raw = info["json_raw"]
     try:
-        upsert_url = "http://ec2-16-162-55-226.ap-east-1.compute.amazonaws.com:9000/query/SocialGraph/upsert_hyper_vertex"
+        upsert_url = "http://hostname/query/SocialGraph/upsert_hyper_vertex"
         headers = {
-            "Authorization": "Bearer p332u7kv2kpq1ju6cs8v7nfcl44err7p",
             "Content-Type": "application/json; charset=utf-8",
         }
         response = requests.post(
