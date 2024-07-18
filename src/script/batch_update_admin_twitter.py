@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-20 16:33:42
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 15:42:44
+LastEditTime: 2024-07-18 16:14:59
 FilePath: /data_process/src/script/batch_update_admin_twitter.py
 Description: 
 '''
@@ -123,7 +123,7 @@ def process_admin_account():
                     "connection_id": row["connection_id"]
                 })
 
-    conn = psycopg2.connect("postgresql://postgres:umeith6ahs9kahCh@data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com/nextid")
+    conn = psycopg2.connect("postgresql:dsn")
     conn.autocommit = True
     cursor = conn.cursor()
     try:
@@ -136,7 +136,7 @@ def process_admin_account():
         conn.close()
 
 def test_search():
-    conn = psycopg2.connect("postgresql://postgres:umeith6ahs9kahCh@data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com/nextid")
+    conn = psycopg2.connect("postgresql:dsn")
     conn.autocommit = True
     cursor = conn.cursor()
     

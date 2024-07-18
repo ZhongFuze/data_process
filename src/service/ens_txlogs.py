@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-17 17:54:04
+LastEditTime: 2024-07-18 16:19:04
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -39,8 +39,7 @@ old_ens_registrar_controller_count = "690004"
 old_ens_registrar_controller_tx="690005"
 
 headers = {
-    # "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
-    "x-api-key": "2j9LRI99ctadpfmfZkZLaJJGO5d",
+    "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
     "Content-Type": "application/json",
 }
 

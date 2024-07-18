@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-10 15:32:03
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-10 22:45:47
+LastEditTime: 2024-07-18 16:16:29
 FilePath: /data_process/src/script/msk_account_connection_to_nextid_dev.py
 Description: nextid for account_connection data consumer
 '''
@@ -20,7 +20,10 @@ import confluent_kafka
 from confluent_kafka import Consumer
 from psycopg2.extras import execute_values, execute_batch
 
-PG_DSN = "postgresql://postgres:umeith6ahs9kahCh@data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com/nextid"
+import setting
+
+
+PG_DSN = setting.PG_DSN["keybase"]
 
 config = {
     "bootstrap.servers": "b-2.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com,b-1.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com,b-3.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com",

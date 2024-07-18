@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-02-04 16:45:34
 LastEditors: Zella Zhong
-LastEditTime: 2024-04-26 15:26:23
+LastEditTime: 2024-07-18 16:15:04
 FilePath: /data_process/src/script/batch_load_lensv2.py
 Description: 
 '''
@@ -36,13 +36,7 @@ lens_social_data_dirs = os.path.join(setting.Settings["datapath"], "lens_v2_soci
 
 
 def dumps_lens_profile_handles_v2():
-    conn_params = {
-        'dbname': 'maskx',
-        'user': 'masknetwork',
-        'password': 'bzscNE3vUQxmmQyc6EsV',
-        'host': 'dimension-data-readonly.c6fydzgxd31o.us-east-1.rds.amazonaws.com',
-        'port': '5432'  # Default PostgreSQL port is 5432
-    }
+    conn_params = {}
 
     try:
         # Connect to your database
@@ -87,16 +81,7 @@ def dumps_lens_profile_handles_v2():
 
 
 def dumps_lens_follow_v2():
-    # pg_dump --host dimension-data-readonly.c6fydzgxd31o.us-east-1.rds.amazonaws.com --port 5432
-    # --username masknetwork --format plain --verbose --file "lens_follow_v2" --table public.lens_follow_v2 maskx
-    # Connection parameters - replace these with your database information
-    conn_params = {
-        'dbname': 'maskx',
-        'user': 'masknetwork',
-        'password': 'bzscNE3vUQxmmQyc6EsV',
-        'host': 'dimension-data-readonly.c6fydzgxd31o.us-east-1.rds.amazonaws.com',
-        'port': '5432'  # Default PostgreSQL port is 5432
-    }
+    conn_params = {}
 
     try:
         # Connect to your database
