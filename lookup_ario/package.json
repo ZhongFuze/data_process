@@ -1,0 +1,17 @@
+{
+  "name": "lookup_ario",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "Zella Zhong <zhongsigen@outlook.com>",
+  "license": "ISC",
+  "dependencies": {
+    "@ar.io/sdk": "^2.0.2",
+    "express": "^4.19.2"
+  }
+}
