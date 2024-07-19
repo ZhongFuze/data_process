@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-25 21:57:35
+LastEditTime: 2024-07-20 04:21:38
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -64,6 +64,17 @@ class Fetcher():
         url = "http://api.clusters.xyz/v0.1/name/addresses"
         payload = json.dumps(addresses)
         response = requests.post(url=url, data=payload, timeout=30)
+        if response.status_code != 200:
+            logging.warn("Clusters API response failed: url={}, {} {}".format(url, response.status_code, response.reason))
+            return None
+        raw_text = response.text
+        res = json.loads(raw_text)
+        return res
+
+    def bulk_get_clusters(self, clusters_list):
+        url = "https://api.clusters.xyz/v0.1/cluster/names"
+        payload = json.dumps(clusters_list)
+        response = requests.post(url=url, data=payload, timeout=120)
         if response.status_code != 200:
             logging.warn("Clusters API response failed: url={}, {} {}".format(url, response.status_code, response.reason))
             return None
@@ -152,6 +163,53 @@ class Fetcher():
         if resp["code"] != 0:
             raise Exception("Clusters API response logic failed: {}".format(resp))
         return resp
+
+    def dumps_clusters_events(self, cursor, upsert_data):
+        '''
+        description: fetch clusters indexes data save into clusters_events database
+        '''
+        sql_statement = """INSERT INTO public.clusters_events (
+            clusterId,
+            bytes32Address,
+            address,
+            addressType,
+            platform,
+            clusterName,
+            name,
+            isVerified,
+            profileUrl,
+            imageUrl,
+            updatedAt
+        ) VALUES %s
+        ON CONFLICT (address, clusterName, name)
+        DO UPDATE SET
+            isVerified = EXCLUDED.isVerified,
+            updatedAt = EXCLUDED.updatedAt;
+        """
+        if upsert_data:
+            try:
+                execute_values(cursor, sql_statement, upsert_data)
+                logging.info("Batch insert completed {} records.".format(len(upsert_data)))
+            except Exception as ex:
+                logging.error("Caught exception during insert in {}".format(json.dumps(upsert_data)))
+                raise ex
+        else:
+            logging.debug("No valid upsert_data to process.")
+
+    def remove_cluster_address(self, cursor, delete_data):
+        sql_delete = """
+            DELETE FROM public.clusters_events
+            WHERE 
+                clusterId = %s AND
+                addressType = %s AND
+                address = %s;
+            """
+        if delete_data:
+            execute_batch(cursor, sql_delete, delete_data)
+            cursor.connection.commit()  # Ensure changes are committed to the database
+            logging.info("Batch delete for {} records".format(len(delete_data)))
+        else:
+            logging.info("No valid deletion data to process.")
 
     def upsert_clusters_to_db(self, cursor, items):
         '''
@@ -309,7 +367,166 @@ class Fetcher():
         else:
             logging.debug("No valid delete_ids to process.")
 
-    def fetch_clusters(self, cursor):
+    def fetch_clusters_events(self, cursor):
+        '''
+        description: 
+            Get a list of addresses's event with eventType that are using Clusters with their associated name. 
+            The list is in ascending order from oldest to most recent and 
+            limited to the first 1,000 rows.
+        '''
+        url = "https://api.clusters.xyz/v0.1/events"
+        fromTimestamp = 0
+        all_count = 0
+        batch_count = 0
+        max_batch_limit = 65536
+        while True:
+            new_url = ""
+            if fromTimestamp != 0:
+                new_url = "{}?fromTimestamp={}".format(url, fromTimestamp)
+            else:
+                new_url = url
+
+            try:
+                resp = self.call_get(new_url)
+                batch_count += 1
+                all_count += resp["total"]
+                logging.info("Fetch clusters batch={}, batch_total={}, all_count={}".format(
+                    batch_count, resp["total"], all_count))
+
+                delete_cluster_data = []
+                updated_at_map = {}
+                clusters_map = {}
+                for item in resp["data"]:
+                    if item["eventType"] == "register":
+                        cluster_id = item.get("clusterId", 0)
+                        if cluster_id == 0:
+                            continue
+                        register = {
+                            "clusterId": cluster_id,
+                            "bytes32Address": item.get("bytes32Address"),
+                            "address": item.get("address"),
+                            "addressType": item.get("addressType"),
+                            "updatedAt": item.get("timestamp"),
+                            "name": "",
+                            "isVerified": False,
+                            "profileUrl": "",
+                            "imageUrl": "",
+                        }
+                        cluster_name = None
+                        if "data" in item:
+                            if "name" in item["data"]:
+                                cluster_name = item["data"]["name"]
+                                register["clusterName"] = cluster_name
+                                clusters_map[cluster_name] = register
+                        if cluster_name is None:
+                            continue
+                    elif item["eventType"] == "removeWallet":
+                        cluster_id = item.get("clusterId", 0)
+                        if cluster_id == 0:
+                            continue
+                        address = item.get("address")
+                        address_type = item.get("addressType")
+                        delete_cluster_data.append((str(cluster_id), address_type, address))
+                    elif item["eventType"] == "updateWallet":
+                        unique_key = "{},{},{}".format(item["clusterId"], item["addressType"], item["address"])
+                        updated_at_map[unique_key] = item["timestamp"]
+
+                upsert_data = []
+                names = [key for key in clusters_map]
+                bulk_get_clusters_ss = time.time()
+                bulk_result = self.bulk_get_clusters(names)
+                logging.info("Fetch Bulk Get Clusters cost: {}".format(time.time() - bulk_get_clusters_ss))
+                for item in bulk_result:
+                    cluster_name = item["name"].strip("/")
+                    if cluster_name in clusters_map:
+                        register_info = clusters_map[cluster_name]
+                        profileUrl = item.get("profileUrl", "")
+                        imageUrl = item.get("imageUrl", "")
+                        wallets = item["wallets"]
+                        for wallet in wallets:
+                            address_type = wallet["type"]
+                            name = wallet["name"]
+                            address = wallet["address"]
+                            if address_type is None:
+                                continue
+                            if address == "":
+                                continue
+                            if name == "":
+                                continue
+                            if cluster_name is None:
+                                continue
+
+                            updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(register_info["updatedAt"])))
+                            unique_key = "{},{},{}".format(register_info["clusterId"], address_type, address)
+                            new_updated_at = updated_at_map.get(unique_key, 0)
+                            if new_updated_at != 0:
+                                updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(new_updated_at)))
+
+                            platform = ""
+                            if address_type == "aptos":
+                                platform = "aptos"
+                            elif address_type == "evm":
+                                platform = "ethereum"
+                            elif address_type == "solana":
+                                platform = "solana"
+                            elif address_type == "dogecoin":
+                                platform = "doge"
+                            elif address_type == "near":
+                                platform = "near"
+                            elif address_type == "stacks":
+                                platform = "stacks"
+                            elif address_type == "tron":
+                                platform = "tron"
+                            elif address_type == "ton":
+                                platform = "ton"
+                            elif address_type == "ripple-classic":
+                                platform = "xrpc"
+                            elif address_type.find("bitcoin") == -1:
+                                platform = "bitcoin"
+                            elif address_type.find("cosmos") == -1:
+                                platform = "cosmos"
+                            elif address_type.find("litecoin") == -1:
+                                platform = "litecoin"
+                            else:
+                                platform = "unknown"
+
+                            # upsert_data.append({
+                            #     "clusterId": register_info["clusterId"],
+                            #     "bytes32Address": register_info["bytes32Address"],
+                            #     "updatedAt": updated_at,
+                            #     "profileUrl": profileUrl,
+                            #     "imageUrl": imageUrl,
+                            #     "clusterName": cluster_name,
+                            #     "address": wallet["address"],
+                            #     "addressType": wallet["type"],
+                            #     "platform": platform,
+                            #     "name": wallet["name"],
+                            #     "isVerified": wallet["isVerified"],
+                            # })
+
+                            upsert_data.append(
+                                (register_info["clusterId"], register_info["bytes32Address"], address, address_type, platform, cluster_name, name, wallet["isVerified"], profileUrl, imageUrl, updated_at)
+                            )
+                self.dumps_clusters_events(cursor, upsert_data)
+                self.remove_cluster_address(cursor, delete_cluster_data)
+                fromTimestamp = resp["data"][-1]["timestamp"]
+                fromTimestamp += 1
+                if resp["nextPage"] == "" and batch_count > 0:
+                    break
+                if resp["total"] < PAGE_LIMIT:
+                    break
+                time.sleep(5) # For frequency limitation
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                logging.error("Fetch clusters: Exception occurs error! {}".format(error_msg))
+                batch_count += 1
+
+            if batch_count > max_batch_limit:
+                logging.info("Fetch clusters batch=({}) > max_limit({}), all_count={}, exit loop".format(
+                    batch_count, max_batch_limit, all_count))
+                break
+
+    def fetch_clusters_addresses(self, cursor):
         '''
         description: 
             Get a list of addresses that are using Clusters with their associated name. 
@@ -367,7 +584,8 @@ class Fetcher():
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
 
         try:
-            self.fetch_clusters(cursor)
+            # self.fetch_clusters_addresses(cursor)
+            self.fetch_clusters_events(cursor)
             end = time.time()
             ts_delta = end - start
             logging.info("Fetch clusters online dump end at: {}".format(
@@ -375,7 +593,7 @@ class Fetcher():
             logging.info("Fetch clusters online dump spends: {}".format(ts_delta))
 
             # Supplement correction
-            self.supplement_correction(cursor)
+            # self.supplement_correction(cursor)
         except Exception as ex:
             error_msg = traceback.format_exc()
             logging.error("Fetch clusters online dump: Exception occurs error! {}".format(error_msg))
