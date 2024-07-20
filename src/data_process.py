@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-20 04:31:56
+LastEditTime: 2024-07-20 18:43:40
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -43,8 +43,8 @@ def clusters_name_job():
 
 
 def ens_txlogs_offline_fetch():
-    start_date = "2024-04-22"
-    end_date = "2024-07-19"
+    start_date = "2020-02-04"
+    end_date = "2021-12-31"
     logging.info("Starting ens_txlogs_offline_fetch job...")
     ENSLogFetcher().offline_dump(start_date, end_date)
 

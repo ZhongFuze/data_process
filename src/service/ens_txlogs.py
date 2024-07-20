@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-18 18:51:38
+LastEditTime: 2024-07-20 18:52:05
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -387,55 +387,55 @@ class Fetcher():
         supplement_fw = open(supplement_path + ".loading", "w", encoding="utf-8")
         format_str = "\t".join(["{}"] * 10) + "\n"
         try:
-            # Old ETH Registrar Controller
-            # 1. query if supplement data exists
-            # 2. count supplement data
-            old_registrar_controller_count = self.get_old_registrar_controller_count(start_time, end_time)
-            times = math.ceil(old_registrar_controller_count / PER_COUNT)
-            # 3. batch fetch records with for-loop
-            for i in range(0, times):
-                offset = i * PER_COUNT
-                query_params = {
-                    "queryParameters": {
-                        "start_time": start_time,
-                        "end_time": end_time,
-                        "custom_offset": str(offset),
-                        "custom_limit": str(PER_COUNT)
-                    }
-                }
-                record_result = fetch_results_with_retry(old_ens_registrar_controller_tx, query_params)
-                if record_result == 0:
-                    continue
-                if record_result["code"] != 200:
-                    err_msg = "Chainbase fetch failed: code:[{}], message[{}], query_params={}".format(
-                        record_result["code"], record_result["message"], json.dumps(query_params))
-                    raise Exception(err_msg)
+            # # Old ETH Registrar Controller
+            # # 1. query if supplement data exists
+            # # 2. count supplement data
+            # old_registrar_controller_count = self.get_old_registrar_controller_count(start_time, end_time)
+            # times = math.ceil(old_registrar_controller_count / PER_COUNT)
+            # # 3. batch fetch records with for-loop
+            # for i in range(0, times):
+            #     offset = i * PER_COUNT
+            #     query_params = {
+            #         "queryParameters": {
+            #             "start_time": start_time,
+            #             "end_time": end_time,
+            #             "custom_offset": str(offset),
+            #             "custom_limit": str(PER_COUNT)
+            #         }
+            #     }
+            #     record_result = fetch_results_with_retry(old_ens_registrar_controller_tx, query_params)
+            #     if record_result == 0:
+            #         continue
+            #     if record_result["code"] != 200:
+            #         err_msg = "Chainbase fetch failed: code:[{}], message[{}], query_params={}".format(
+            #             record_result["code"], record_result["message"], json.dumps(query_params))
+            #         raise Exception(err_msg)
                 
-                if "data" in record_result:
-                    query_execution_id = record_result["data"].get("execution_id", "")
-                    query_row_count = record_result["data"].get("total_row_count", 0)
-                    query_ts = record_result["data"].get("execution_time_millis", 0)
-                    line_prefix = "Loading old_ens_registrar_controller_txlogs[{}], execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
-                        date, query_execution_id, old_registrar_controller_count, offset, query_row_count, query_ts / 1000)
-                    logging.info(line_prefix)
-                    if "data" in record_result["data"]:
-                        for r in record_result["data"]["data"]:
-                            # block_number
-                            # block_timestamp
-                            # transaction_hash
-                            # transaction_index
-                            # log_index
-                            # contract_address # saving contract_label
-                            # method_id
-                            # signature
-                            # decoded
+            #     if "data" in record_result:
+            #         query_execution_id = record_result["data"].get("execution_id", "")
+            #         query_row_count = record_result["data"].get("total_row_count", 0)
+            #         query_ts = record_result["data"].get("execution_time_millis", 0)
+            #         line_prefix = "Loading old_ens_registrar_controller_txlogs[{}], execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
+            #             date, query_execution_id, old_registrar_controller_count, offset, query_row_count, query_ts / 1000)
+            #         logging.info(line_prefix)
+            #         if "data" in record_result["data"]:
+            #             for r in record_result["data"]["data"]:
+            #                 # block_number
+            #                 # block_timestamp
+            #                 # transaction_hash
+            #                 # transaction_index
+            #                 # log_index
+            #                 # contract_address # saving contract_label
+            #                 # method_id
+            #                 # signature
+            #                 # decoded
 
-                            # LABEL_MAP
-                            contract_address = r[5]
-                            contract_label = LABEL_MAP.get(contract_address, "Unknown")
-                            write_str = format_str.format(
-                                r[0], r[1], r[2], r[3], r[4], contract_address, contract_label, r[6], r[7], r[8])
-                            supplement_fw.write(write_str)
+            #                 # LABEL_MAP
+            #                 contract_address = r[5]
+            #                 contract_label = LABEL_MAP.get(contract_address, "Unknown")
+            #                 write_str = format_str.format(
+            #                     r[0], r[1], r[2], r[3], r[4], contract_address, contract_label, r[6], r[7], r[8])
+            #                 supplement_fw.write(write_str)
 
             # Old Reverse Registrar
             old_reverse_count = self.get_old_reverse_count(start_time, end_time)
@@ -651,7 +651,7 @@ class Fetcher():
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
         dates = self.date_range(start_date, end_date)
         for date in dates:
-            self.daily_fetch(date)
+            # self.daily_fetch(date)
             self.daily_fetch_supplement(date)
             # pass
 
