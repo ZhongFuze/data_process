@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-06 15:17:04
 LastEditors: Zella Zhong
-LastEditTime: 2024-06-25 21:59:41
+LastEditTime: 2024-07-20 19:12:44
 FilePath: /data_process/src/controller/clusters_controller.py
 Description: 
 '''
@@ -45,11 +45,11 @@ class ClustersController(httpsvr.BaseController):
             pg_conn = get_conn()
             cursor = pg_conn.cursor()
             ssql = """
-                SELECT address, platform, clustername, name, isverified, updatedat
-                FROM public.clusters_name
+                SELECT address, platform, clustername, name, isverified, updatedat, profileurl, imageurl
+                FROM public.clusters_events
                 WHERE clustername = (
                     SELECT clustername
-                    FROM public.clusters_name WHERE address='{}' AND clustername is not null AND isverified=true
+                    FROM public.clusters_events WHERE address='{}' AND clustername is not null AND isverified=true
                 ) AND isverified=true
             """
             cursor.execute(ssql.format(address))
@@ -79,12 +79,12 @@ class ClustersController(httpsvr.BaseController):
         ssql = ""
         if name.find("/") != -1:
             cluster_name = name.split("/")[0]
-            ssql += """SELECT address, platform, clustername, name, isverified, updatedat FROM public.clusters_name
+            ssql += """SELECT address, platform, clustername, name, isverified, updatedat, profileurl, imageurl FROM public.clusters_events
                     WHERE clustername='{}' AND isverified=true
             """
             ssql = ssql.format(cluster_name)
         else:
-            ssql += """SELECT address, platform, clustername, name, isverified, updatedat FROM public.clusters_name
+            ssql += """SELECT address, platform, clustername, name, isverified, updatedat, profileurl, imageurl FROM public.clusters_events
                     WHERE clustername='{}' AND isverified=true
             """
             ssql = ssql.format(name)
