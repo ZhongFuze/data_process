@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-20 18:52:05
+LastEditTime: 2024-07-21 22:34:48
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -649,11 +649,18 @@ class Fetcher():
         '''
         headers["x-api-key"] = setting.CHAINBASE_SETTINGS["api_key"]
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
-        dates = self.date_range(start_date, end_date)
-        for date in dates:
-            # self.daily_fetch(date)
+        # dates = self.date_range(start_date, end_date)
+        # for date in dates:
+        #     self.daily_fetch(date)
+        #     self.daily_fetch_supplement(date)
+        base_failed_dates = ["2020-06-30", "2020-07-01", "2020-07-02", "2020-07-03", "2020-07-04", "2020-07-08", "2020-07-11", "2020-08-24", "2020-08-25", "2020-08-27", "2020-10-20", "2021-11-09", "2022-05-16", "2022-09-17"]
+        supplement_failed_dates = ["2022-03-19", "2022-03-31", "2022-05-02", "2022-05-19", "2022-05-21", "2022-05-23", "2022-08-14", "2022-10-01", "2022-10-22", "2022-12-09", "2022-12-11"]
+
+        for date in base_failed_dates:
+            self.daily_fetch(date)
+
+        for date in supplement_failed_dates:
             self.daily_fetch_supplement(date)
-            # pass
 
 
 if __name__ == "__main__":
