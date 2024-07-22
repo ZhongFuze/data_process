@@ -9,3 +9,4 @@
 /data
 /justfile
 /Makefile
+/src/script/twitter_test.py

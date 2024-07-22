@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-20 16:33:42
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-18 16:14:59
+LastEditTime: 2024-07-22 22:03:38
 FilePath: /data_process/src/script/batch_update_admin_twitter.py
 Description: 
 '''
@@ -33,7 +33,7 @@ import setting
 from script.flock import FileLock
 
 
-sub_datapath = "admin"
+sub_datapath = "admin_2024-07-22"
 opensea_account_data_dirs = os.path.join(setting.Settings["datapath"], "admin_twitter/%s" % sub_datapath)
 
 
@@ -65,8 +65,7 @@ def update_twitter_username(cursor, rows):
 def delete_admin_twitter(cursor, rows):
     '''
     description: Not real delete, just update the action = "delete"
-    '''    
-    
+    '''
     delete_sql = """
         UPDATE public.firefly_account_connection
         SET 
@@ -102,6 +101,15 @@ def process_admin_account():
     for r in twitter_handle_result:
         digital_id_name_mapping[r["id"]] = r["username"].lower()
 
+    missing_twitter_handle_filepath = os.path.join(opensea_account_data_dirs, "missing_digital_ids.tsv")
+    with open(missing_twitter_handle_filepath, 'r', encoding='utf-8') as tsvfile:
+        for row in tsvfile.readlines():
+            row = row.strip()
+            if row == "":
+                continue
+            item = row.split("\t")
+            digital_id_name_mapping[item[1]] = item[2].lower()
+
     update_rows = []
     delete_rows = []
     admin_filepath = os.path.join(opensea_account_data_dirs, "admin.csv")
@@ -128,7 +136,7 @@ def process_admin_account():
     cursor = conn.cursor()
     try:
         update_twitter_username(cursor, update_rows)
-        delete_admin_twitter(cursor, delete_rows)
+        # delete_admin_twitter(cursor, delete_rows)
     except Exception as ex:
         logging.exception(ex)
     finally:
@@ -196,5 +204,5 @@ def test_search():
     conn.close()
 
 if __name__ == "__main__":
-    # process_admin_account()
-    test_search()
+    process_admin_account()
+    # test_search()

@@ -8,3 +8,4 @@ src/config/*.toml
 app
 lookup_gno/node_modules/
 lookup_ario/node_modules/
+src/script/twitter_test.py
