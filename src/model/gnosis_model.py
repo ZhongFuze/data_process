@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-12 21:51:10
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-16 14:19:21
+LastEditTime: 2024-07-23 20:52:46
 FilePath: /data_process/src/model/gnosis_model.py
 Description: get and set gnosis domain names
 '''
@@ -195,7 +195,7 @@ class GnosisModel():
         uri += "&address={}"  # PublicResolver or ERC1967Proxy
         uri += "&startblock={}&endblock={}&sort=asc"
         uri += "&page={}&offset={}"
-        uri += "&apikey=ED5FB269AGSMIAHR97MNVFUG29HV9JAVC9"
+        uri += "&apikey=" + setting.GNOSIS_SETTINGS["api_key"]
 
         url = uri.format(contract_address, start_block, end_block, page, offset)
         result = []

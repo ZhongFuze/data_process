@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-21 22:34:48
+LastEditTime: 2024-07-23 20:55:36
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -38,11 +38,6 @@ ens_old_reverse_registration_count="690003"
 old_ens_registrar_controller_count = "690004"
 old_ens_registrar_controller_tx="690005"
 
-headers = {
-    "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
-    "Content-Type": "application/json",
-}
-
 LABEL_MAP = {
     "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401": "NameWrapper",
     "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85": "Base Registrar Implementation",
@@ -73,6 +68,10 @@ def decoded_reverse_registry_input(hex_data):
     return decoded_string
 
 def execute_query(query_id, payload):
+    headers = {
+        "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
+        "Content-Type": "application/json",
+    }
     response = requests.post(
         f"https://api.chainbase.com/api/v1/query/{query_id}/execute",
         json=payload,
@@ -83,6 +82,10 @@ def execute_query(query_id, payload):
 
 
 def check_status(execution_id):
+    headers = {
+        "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
+        "Content-Type": "application/json",
+    }
     response = requests.get(
         f"https://api.chainbase.com/api/v1/execution/{execution_id}/status",
         headers=headers,
@@ -92,6 +95,10 @@ def check_status(execution_id):
 
 
 def get_results(execution_id):
+    headers = {
+        "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
+        "Content-Type": "application/json",
+    }
     response = requests.get(
         f"https://api.chainbase.com/api/v1/execution/{execution_id}/results",
         headers=headers,
@@ -647,7 +654,6 @@ class Fetcher():
         '''
         description: loadings data split by date between start and end
         '''
-        headers["x-api-key"] = setting.CHAINBASE_SETTINGS["api_key"]
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
         # dates = self.date_range(start_date, end_date)
         # for date in dates:

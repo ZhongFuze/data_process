@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-20 18:43:40
+LastEditTime: 2024-07-23 20:56:32
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -92,7 +92,6 @@ if __name__ == "__main__":
         )
         scheduler.start()
 
-        ens_txlogs_offline_fetch()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

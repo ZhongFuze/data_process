@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-21 17:59:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-05-21 20:39:51
+LastEditTime: 2024-07-23 20:49:27
 FilePath: /data_process/src/model/warpcast_model.py
 Description: get farcaster fid/fname/display_name profile for warpcast
 '''
@@ -17,6 +17,7 @@ import requests
 import urllib3
 import psycopg2
 
+import setting
 from ratelimit import limits, sleep_and_retry
 
 
@@ -37,9 +38,10 @@ class WarpcastModel(object):
         API calls per minute: 60 calls
         description: call_get
         '''
+        authorization = "Bearer " + setting.WARPCAST_SETTINGS["token"]
         headers = {
             "accept": "application/json",
-            "authorization": "Bearer MK-6OEIkS3ZKEGDtxoaYohjySY4UDBrFdqdjch8snW/HZ38fpCfLoS9sfTTcn27WPzovMOyF5gmTDMkK8pmxa6HaA==",
+            "authorization": authorization,
         }
         retry_times = 0
         resp = {"code": 0, "msg": ""}

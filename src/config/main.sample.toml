@@ -29,3 +29,9 @@ api = "https://indexer.crossbell.io/v1"
 
 [rpc_url]
 polygon = "https://rpc-mainnet.maticvigil.com"
+
+[warpcast]
+token = "warpcast.token"
+
+[gnosisscan]
+api_key = "123456abcdefgh6789abcdefgh"

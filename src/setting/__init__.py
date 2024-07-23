@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-15 20:52:39
+LastEditTime: 2024-07-23 20:52:02
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -46,6 +46,13 @@ PG_DSN = {
     "keybase": "",
 }
 
+WARPCAST_SETTINGS = {
+    "token": "",
+}
+
+GNOSIS_SETTINGS = {
+    "api_key": "",
+}
 
 def load_settings(env="test"):
     """
@@ -56,6 +63,8 @@ def load_settings(env="test"):
     global CHAINBASE_SETTINGS
     global RPC_SETTINGS
     global CROSSBELL_SETTINGS
+    global WARPCAST_SETTINGS
+    global GNOSIS_SETTINGS
     global PG_DSN
 
     config_file = "/app/config/production.toml"
@@ -75,6 +84,8 @@ def load_settings(env="test"):
     DATACLOUD_SETTINGS = load_datacloud_settings(config_file)
     CHAINBASE_SETTINGS = load_chainbase_settings(config_file)
     CROSSBELL_SETTINGS = load_crossbell_settings(config_file)
+    WARPCAST_SETTINGS = load_warpcast_settings(config_file)
+    GNOSIS_SETTINGS = load_gnosis_settings(config_file)
     RPC_SETTINGS = load_rpc_settings(config_file)
     PG_DSN = load_dsn(config_file)
     return config
@@ -132,6 +143,21 @@ def load_chainbase_settings(config_file):
     except Exception as ex:
         logging.exception(ex)
 
+def load_gnosis_settings(config_file):
+    """
+    @description: load gnosisscan auth configurations
+    @params: config_file
+    @return gnosis_settings
+    """
+    try:
+        config = toml.load(config_file)
+        gnosis_settings = {
+            "api_key": config["gnosisscan"]["api_key"],
+        }
+        return gnosis_settings
+    except Exception as ex:
+        logging.exception(ex)
+
 
 def load_rpc_settings(config_file):
     """
@@ -162,6 +188,22 @@ def load_crossbell_settings(config_file):
             "graphql": config["crossbell_api"]["graphql"],
         }
         return rpc_settings
+    except Exception as ex:
+        logging.exception(ex)
+
+
+def load_warpcast_settings(config_file):
+    """
+    @description: load warpcast token configurations
+    @params: config_file
+    @return warpcast_settings
+    """
+    try:
+        config = toml.load(config_file)
+        warpcast_settings = {
+            "token": config["warpcast"]["token"],
+        }
+        return warpcast_settings
     except Exception as ex:
         logging.exception(ex)
 
