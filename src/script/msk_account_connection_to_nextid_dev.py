@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-10 15:32:03
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-18 16:16:29
+LastEditTime: 2024-07-23 19:31:43
 FilePath: /data_process/src/script/msk_account_connection_to_nextid_dev.py
 Description: nextid for account_connection data consumer
 '''
@@ -26,7 +26,7 @@ import setting
 PG_DSN = setting.PG_DSN["keybase"]
 
 config = {
-    "bootstrap.servers": "b-2.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com,b-1.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com,b-3.dimensionprodkafka.2mmvbr.c2.kafka.us-east-1.amazonaws.com",
+    "bootstrap.servers": "kafka.dev_server",
     "group.id": "neo4j_account_connection_group",
     "auto.offset.reset": "earliest",
     "enable.auto.commit": False,

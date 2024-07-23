@@ -19,7 +19,3 @@ CREATE INDEX opensea_account_ins_verified_idx ON public.opensea_account (instagr
 CREATE INDEX opensea_account_pick_idx ON public.opensea_account (is_pick);
 CREATE INDEX opensea_account_twitter_handle_idx ON public.opensea_account (twitter_username);
 CREATE INDEX opensea_account_twitter_verified_idx ON public.opensea_account (twitter_is_verified);
-
-
--- Loading data
-psql --host=data-process-rds.ccym4z6uvp7m.ap-east-1.rds.amazonaws.com --port=5432 --username=postgres --dbname=nextid -c "\copy public.opensea_account (id, address, twitter_username, instagram_username, twitter_is_verified, instagram_is_verified, is_pick, updated_at, created_at, twitter_id, instagram_id) FROM '/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/data/opensea_account/opensea_account.csv' WITH (FORMAT csv, HEADER);"
