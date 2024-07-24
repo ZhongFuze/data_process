@@ -13,3 +13,8 @@ CREATE TABLE ens_txlogs (
 );
 
 CREATE INDEX idx_txlogs_index ON ens_txlogs (transaction_hash, transaction_index, log_index);
+
+BEGIN;
+TRUNCATE TABLE public.ens_txlogs;
+ALTER SEQUENCE public.ens_txlogs_id_seq RESTART WITH 1;
+COMMIT;

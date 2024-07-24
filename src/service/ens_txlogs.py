@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 22:52:33
+LastEditTime: 2024-07-24 23:00:48
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -546,7 +546,16 @@ class Fetcher():
         data_path = os.path.join(ens_txlogs_dirs, date + ".tsv")
         supplement_path = os.path.join(ens_txlogs_dirs, date + "_supplement.tsv")
         if not os.path.exists(data_path):
-            raise Exception(f"Datapath[{data_path}] does not exist")
+            if os.path.exists(data_path + ".finished"):
+                logging.info(f"data_path {data_path}.finished has already been dumped")
+            else:
+                raise Exception(f"Datapath[{data_path}] does not exist")
+        
+        if not os.path.exists(supplement_path):
+            if os.path.exists(supplement_path + ".finished"):
+                logging.info(f"supplement_path {supplement_path}.finished has already been dumped")
+            else:
+                raise Exception(f"Datapath[{supplement_path}] does not exist")
 
         try:
             # Open the TSV file for reading
