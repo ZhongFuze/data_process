@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 22:18:03
+LastEditTime: 2024-07-24 22:52:33
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -544,7 +544,7 @@ class Fetcher():
             raise Exception(f"Data dir[{ens_txlogs_dirs}] does not exist")
 
         data_path = os.path.join(ens_txlogs_dirs, date + ".tsv")
-        supplement_path = os.path.join(ens_txlogs_dirs, date + ".tsv")
+        supplement_path = os.path.join(ens_txlogs_dirs, date + "_supplement.tsv")
         if not os.path.exists(data_path):
             raise Exception(f"Datapath[{data_path}] does not exist")
 
@@ -560,7 +560,7 @@ class Fetcher():
         try:
             with open(supplement_path, 'r', encoding="utf-8") as supplement_fr:
                 cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t')", file=supplement_fr)
-            os.rename(data_path, data_path + ".finished")
+            os.rename(supplement_path, supplement_path + ".finished")
         except Exception as ex:
             raise ex
 
