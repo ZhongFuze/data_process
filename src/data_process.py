@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-23 20:56:32
+LastEditTime: 2024-07-24 22:18:38
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -48,6 +48,9 @@ def ens_txlogs_offline_fetch():
     logging.info("Starting ens_txlogs_offline_fetch job...")
     ENSLogFetcher().offline_dump(start_date, end_date)
 
+def ens_txlogs_offline_dump_to_db():
+    logging.info("Starting ens_txlogs_offline_dump_to_db job...")
+    ENSLogFetcher().offline_dump_to_db()
 
 if __name__ == "__main__":
     # config = setting.load_settings(env="development")
@@ -92,6 +95,7 @@ if __name__ == "__main__":
         )
         scheduler.start()
 
+        ens_txlogs_offline_dump_to_db()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

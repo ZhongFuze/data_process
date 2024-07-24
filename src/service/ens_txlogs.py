@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-23 20:55:36
+LastEditTime: 2024-07-24 22:18:03
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -19,9 +19,13 @@ import uuid
 import json
 import logging
 import binascii
+import psycopg2
 import requests
+import traceback
 import subprocess
+
 from datetime import datetime, timedelta
+from psycopg2.extras import execute_values, execute_batch
 
 import setting
 
@@ -534,6 +538,32 @@ class Fetcher():
                 fail.write(repr(ex))
             supplement_fw.close()
 
+    def daily_dump_to_db(self, date, cursor):
+        ens_txlogs_dirs = os.path.join(setting.Settings["datapath"], "ens_txlogs")
+        if not os.path.exists(ens_txlogs_dirs):
+            raise Exception(f"Data dir[{ens_txlogs_dirs}] does not exist")
+
+        data_path = os.path.join(ens_txlogs_dirs, date + ".tsv")
+        supplement_path = os.path.join(ens_txlogs_dirs, date + ".tsv")
+        if not os.path.exists(data_path):
+            raise Exception(f"Datapath[{data_path}] does not exist")
+
+        try:
+            # Open the TSV file for reading
+            with open(data_path, 'r', encoding="utf-8") as data_fr:
+                # Use copy_expert to copy data from the file to the target table
+                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t')", file=data_fr)
+            os.rename(data_path, data_path + ".finished")
+        except Exception as ex:
+            raise ex
+
+        try:
+            with open(supplement_path, 'r', encoding="utf-8") as supplement_fr:
+                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t')", file=supplement_fr)
+            os.rename(data_path, data_path + ".finished")
+        except Exception as ex:
+            raise ex
+
     def daily_fetch(self, date, force=False):
         '''
         description: fetch ENS transactions decoded logs by date
@@ -629,7 +659,7 @@ class Fetcher():
             date_list.append(start.date().isoformat())
             start += step
         return date_list
-    
+
     @classmethod
     def count_lines(cls, filename):
         '''
@@ -668,16 +698,49 @@ class Fetcher():
         for date in supplement_failed_dates:
             self.daily_fetch_supplement(date)
 
+    def offline_dump_to_db(self):
+        '''
+        description: loadings data to database
+        '''
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        start_date = "2020-02-04"
+        end_date = "2024-07-19"
+
+        start = time.time()
+        logging.info("loading ENS offline data to db start at: {}".format(
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
+
+        logging.info(f"loading ENS offline data to db between {start_date} and {end_date}")
+
+        dates = self.date_range(start_date, end_date)
+        for date in dates:
+            try:
+                self.daily_dump_to_db(date, cursor)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                logging.error("loading ENS offline data to db[{}]: Exception occurs error! {}".format(date, error_msg))
+
+        end = time.time()
+        ts_delta = end - start
+        logging.info("loading ENS offline data to db end at: {}".format(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
+        logging.info("loading ENS offline data to db spends: {}".format(ts_delta))
+
+        cursor.close()
+        conn.close()
+
 
 if __name__ == "__main__":
-    data = {
-        "queryParameters": {
-            "start_time":"2024-07-10 00:00:00",
-            "end_time":"2024-07-11 00:00:00",
-            "custom_offset":"0",
-            "custom_limit":"1000"
-        }
-    }
+    # data = {
+    #     "queryParameters": {
+    #         "start_time":"2024-07-10 00:00:00",
+    #         "end_time":"2024-07-11 00:00:00",
+    #         "custom_offset":"0",
+    #         "custom_limit":"1000"
+    #     }
+    # }
 
     # data = {
     #     "queryParameters": {
@@ -685,5 +748,6 @@ if __name__ == "__main__":
     #         "end_time":"2024-07-11 00:00:00"
     #     }
     # }
-    result = fetch_txlogs_by_params(data)
-    print(result)
+    # result = fetch_txlogs_by_params(data)
+    # print(result)
+    pass
