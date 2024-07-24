@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 23:00:48
+LastEditTime: 2024-07-24 23:38:19
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -561,14 +561,14 @@ class Fetcher():
             # Open the TSV file for reading
             with open(data_path, 'r', encoding="utf-8") as data_fr:
                 # Use copy_expert to copy data from the file to the target table
-                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t')", file=data_fr)
+                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t', quote E'\b')", file=data_fr)
             os.rename(data_path, data_path + ".finished")
         except Exception as ex:
             raise ex
 
         try:
             with open(supplement_path, 'r', encoding="utf-8") as supplement_fr:
-                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t')", file=supplement_fr)
+                cursor.copy_expert(sql="COPY ens_txlogs(block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded) FROM STDIN WITH (FORMAT CSV, DELIMITER E'\t', quote E'\b')", file=supplement_fr)
             os.rename(supplement_path, supplement_path + ".finished")
         except Exception as ex:
             raise ex
