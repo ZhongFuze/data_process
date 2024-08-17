@@ -163,6 +163,33 @@ ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 COIN_TYPE_ETH = "60"
 
 
+def AddressChanged(decoded_str):
+    '''
+    description: AddressChanged(bytes32,uint256,bytes)
+    param: bytes32 node
+    param: uint256 coinType
+    param: bytes newAddress
+    return node, coin_type, new_address
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    coin_type = decoded_data[1]
+    new_address = decoded_data[2]
+    return node, coin_type, new_address
+
+def AddrChanged(decoded_str):
+    '''
+    description: AddrChanged(bytes32,address)
+    param: bytes32 node
+    param: bytes newAddress
+    return node, new_address
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    new_address = decoded_data[1]
+    return node, new_address
+
+
 def TextChanged(decoded_str):
     '''
     description: TextChanged(bytes32,string,string)
