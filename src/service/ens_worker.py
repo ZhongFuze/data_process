@@ -163,6 +163,36 @@ ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 COIN_TYPE_ETH = "60"
 
 
+def uint256_to_bytes32(value):
+    '''
+    description: uint256_to_bytes32
+    param: value uint256(str)
+    return: bytes32 address(0x64)
+    '''
+    # token ID uint256
+    # bytes32 address
+    # Convert the integer to a 64-character hexadecimal string (32 bytes)
+    return '0x' + format(value, '064x')
+
+
+def bytes32_to_nodehash(value):
+    '''
+    description: bytes32_to_nodehash
+    param: value bytes32 type(label)=bytes32
+    return: bytes32 type(nodehash)=bytes32, hex_str
+    '''
+    # Calculate nodehash: keccak256(abi.encodePacked(base_node, label))
+    label_bytes = to_bytes(hexstr=value)
+    base_node_bytes = to_bytes(hexstr=ETH_NODE)
+
+    # concatenating base_node and label
+    packed_data = base_node_bytes + label_bytes
+
+    # Compute keccak256 hash (equivalent to Solidity's keccak256 function)
+    nodehash = keccak(packed_data)
+    return encode_hex(nodehash)
+
+
 class Worker():
     '''
     description: Worker
