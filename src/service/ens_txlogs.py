@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 23:38:19
+LastEditTime: 2024-08-17 16:29:30
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -707,6 +707,78 @@ class Fetcher():
         for date in supplement_failed_dates:
             self.daily_fetch_supplement(date)
 
+    def insert_supplement(self, date):
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        sql_statement = """INSERT INTO public.ens_txlogs (
+            block_number,
+            block_timestamp,
+            transaction_hash,
+            transaction_index,
+            log_index,
+            contract_address,
+            contract_label,
+            method_id,
+            signature,
+            decoded
+        ) VALUES %s;
+        """
+        upsert_data = []
+
+        # ens_txlogs_dirs = os.path.join(setting.Settings["datapath"], "ens_txlogs")
+        # data_path = os.path.join(ens_txlogs_dirs, "2020-02-10.json")
+        # if not os.path.exists(data_path):
+        #     raise Exception(f"Data path[{data_path}] does not exist")
+
+        # with open(data_path, 'r', encoding='utf8') as f:
+        #     data = json.load(f)
+        #     for r in data["data"]["data"]:
+        #         contract_address = r[5]
+        #         contract_label = LABEL_MAP.get(contract_address, "Unknown")
+        #         tuple_info = (r[0], r[1], r[2], r[3], r[4], contract_address, contract_label, r[6], r[7], r[8])
+        #         print(tuple_info)
+        #         upsert_data.append(tuple_info)
+
+        ens_txlogs_dirs = os.path.join(setting.Settings["datapath"], "ens_txlogs")
+        data_path = os.path.join(ens_txlogs_dirs, date + "_supplement.csv")
+        with open(data_path, 'r', encoding='utf8') as f:
+            for line in f.readlines():
+                line = line.rstrip()
+                r = line.split(",")
+                # block_number
+                # block_timestamp
+                # transaction_hash
+                # transaction_index
+                # log_index
+                # contract_address # saving contract_label
+                # method_id
+                # signature
+                # decoded
+
+                # LABEL_MAP
+                contract_address = r[5]
+                contract_label = LABEL_MAP.get(contract_address, "Unknown")
+                method_id = r[6] + ","
+
+                signature_decoded = line.split(method_id)[-1]
+                signature, decoded = signature_decoded.split("),[")
+                signature = signature + ")"
+                decoded = "[" + decoded
+                tuple_info = (r[0], r[1], r[2], r[3], r[4], contract_address, contract_label, r[6], signature, decoded)
+                upsert_data.append(tuple_info)
+
+        if upsert_data:
+            try:
+                execute_values(cursor, sql_statement, upsert_data)
+                logging.info("Batch insert completed {} records.".format(len(upsert_data)))
+            except Exception as ex:
+                logging.error("Caught exception during insert in {}".format(json.dumps(upsert_data)))
+                raise ex
+        else:
+            logging.debug("No valid create_data to process.")
+
     def offline_dump_to_db(self):
         '''
         description: loadings data to database
@@ -759,4 +831,4 @@ if __name__ == "__main__":
     # }
     # result = fetch_txlogs_by_params(data)
     # print(result)
-    pass
+    Fetcher().insert_supplement("2020-02-11")
