@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 17:06:50
+LastEditTime: 2024-08-17 17:22:07
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -159,6 +159,8 @@ ignore_method = {
 
 # namehash('eth') = 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae
 ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
+# namehash('addr.reverse')
+ADDR_REVERSE_NODE = "0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2"
 COIN_TYPE_ETH = "60"
 
 
@@ -254,6 +256,36 @@ def SetName(decoded_str):
     address = decoded_data[0]
     ens_name = decoded_data[1]
     return address, ens_name
+
+
+def ReverseClaimed(decoded_str):
+    '''
+    description: ReverseClaimed (address addr, bytes32 node)
+    example: ["0x8951c020a0684d061fe939a0f3dcbf076e87f083","0x7bfc00ce54fff4c2fffccfe1990cc5b6b732fe12c25059661c0e3bb19067b758"]
+    tips: node is [address].addr.reverse nodehash
+    param: bytes32 address
+    param: bytes32 node
+    return reverse_node, address
+    '''
+    decoded_data = json.loads(decoded_str)
+    address = decoded_data[0]
+    reverse_node = decoded_data[1]
+    return reverse_node, address
+
+
+def NameChanged(decoded_str):
+    '''
+    description: NameChanged (bytes32 node, string name)
+    example: ["0xe1168c447a48adad3c91e00e5f9075216866d655699501c866ec42da8734c70c","actualicese.eth"]
+    tips: node is [address].addr.reverse nodehash
+    param: bytes32 node
+    param: string name
+    return reverse_node, ens_name
+    '''
+    decoded_data = json.loads(decoded_str)
+    reverse_node = decoded_data[0]
+    ens_name = decoded_data[1]
+    return reverse_node, ens_name
 
 
 def AddressChanged(decoded_str):
