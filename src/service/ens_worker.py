@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 16:34:37
+LastEditTime: 2024-08-17 16:57:17
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -163,6 +163,84 @@ ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 COIN_TYPE_ETH = "60"
 
 
+def NameRegisteredIdOwner(decoded_str):
+    '''
+    description: NameRegistered (uint256 id, address owner, uint256 expires)
+    example: [
+        "110393110730227186427564016478130897043370416314581215101495899015199138768485",
+        "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+        "1932608723"
+    ]
+    param: uint256 id
+    param: address owner
+    param: uint256 expires
+    return node, token_id, label, owner, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    token_id = decoded_data[0]
+    label = uint256_to_bytes32(token_id)
+    owner = decoded_data[1]
+    expire_time = decoded_data[2]
+    node = bytes32_to_nodehash(label)
+    return node, token_id, label, owner, expire_time
+
+
+def NameRegisteredNameLabelOwner(decoded_str):
+    '''
+    description: NameRegistered (string name, bytes32 label, address owner, uint256 cost, uint256 expires)
+    example: [
+        "origincity",
+        "0x1ba442533146e43f1d57fe1e15ff5e0b9880190a0b2ce7ec8bbf2af015eac19b",
+        "0x33debb5ee65549ffa71116957da6db17a9d8fe57",
+        "111653877793707056",
+        "1739163577"
+    ]
+    param: string name
+    param: bytes32 label
+    param: address owner
+    param: uint256 cost
+    param: uint256 expires
+    return node, token_id, label, name, owner, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    name = decoded_data[0]
+    label = decoded_data[1]
+    token_id = bytes32_to_uint256(label)
+    owner = decoded_data[2]
+    expire_time = decoded_data[4]
+    node = bytes32_to_nodehash(label)
+    return node, token_id, label, name, owner, expire_time
+
+
+def NameRegisteredWithCostPremium(decoded_str):
+    '''
+    description: (string name, bytes32 label, address owner, uint256 baseCost, uint256 premium, uint256 expires)
+    example: [
+        "kamran11652",
+        "0x87a563132c98c87b3fbc97e158d157a638d88c31adfe00eb11579369d9052275",
+        "0x0cb3cf9e6e6f91fb231c6f28c64db78efc53a126",
+        "2181843882716550",
+        "0",
+        "1738712327"
+    ]
+    param: string name
+    param: bytes32 label
+    param: address owner
+    param: uint256 baseCost
+    param: uint256 premium
+    param: uint256 expires
+    return node, token_id, label, name, owner, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    name = decoded_data[0]
+    label = decoded_data[1]
+    token_id = bytes32_to_uint256(label)
+    owner = decoded_data[2]
+    expire_time = decoded_data[5]
+    node = bytes32_to_nodehash(label)
+    return node, token_id, label, name, owner, expire_time
+
+
 def AddressChanged(decoded_str):
     '''
     description: AddressChanged(bytes32,uint256,bytes)
@@ -229,6 +307,17 @@ def uint256_to_bytes32(value):
     # bytes32 address
     # Convert the integer to a 64-character hexadecimal string (32 bytes)
     return '0x' + format(value, '064x')
+
+def bytes32_to_uint256(value):
+    '''
+    description: bytes32_to_uint256
+    param: value bytes32 
+    return: id uint256(str)
+    '''
+    # Remove the '0x' prefix if it exists and convert the hex string to an integer
+    trim_value = value.lstrip('0x')
+    # Convert the bytes32 address back to a uint256 integer
+    return str(int(trim_value, 16))
 
 
 def bytes32_to_nodehash(value):
