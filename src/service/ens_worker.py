@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 17:22:07
+LastEditTime: 2024-08-17 17:35:51
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -286,6 +286,47 @@ def NameChanged(decoded_str):
     reverse_node = decoded_data[0]
     ens_name = decoded_data[1]
     return reverse_node, ens_name
+
+
+def NameRenewedID(decoded_str):
+    '''
+    description: NameRenewed (uint256 id, uint256 expires)
+    example: ["472682841505974921215082356139689583184615166363725744496715522782797959178","1743027215"]
+    param: uint256 id
+    param: uint256 expires
+    return node, token_id, label, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    token_id = decoded_data[0]
+    label = uint256_to_bytes32(token_id)
+    expire_time = decoded_data[1]
+    node = bytes32_to_nodehash(label)
+    return node, token_id, label, expire_time
+
+
+def NameRenewedName(decoded_str):
+    '''
+    description: NameRenewed (string name, bytes32 label, uint256 cost, uint256 expires)
+    example: [
+        "paschamo",
+        "0x6980dd4a408d1a34d04ed29556b7cc2850eceed3d900ccf1e15a9f7fa793f7a3",
+        "6240448710294351",
+        "1876898723"
+    ]
+    param: string name
+    param: bytes32 label
+    param: uint256 cost
+    param: uint256 expires
+    return node, token_id, label, ens_name, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    name = decoded_data[0]
+    ens_name = format("{}.eth", name)
+    label = decoded_data[1]
+    token_id = bytes32_to_uint256(label)
+    expire_time = decoded_data[3]
+    node = bytes32_to_nodehash(label)
+    return node, token_id, label, ens_name, expire_time
 
 
 def AddressChanged(decoded_str):
