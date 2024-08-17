@@ -200,16 +200,17 @@ def NameRegisteredNameLabelOwner(decoded_str):
     param: address owner
     param: uint256 cost
     param: uint256 expires
-    return node, token_id, label, name, owner, expire_time
+    return node, token_id, label, ens_name, owner, expire_time
     '''
     decoded_data = json.loads(decoded_str)
     name = decoded_data[0]
+    ens_name = format("{}.eth", name)
     label = decoded_data[1]
     token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[4]
     node = bytes32_to_nodehash(label)
-    return node, token_id, label, name, owner, expire_time
+    return node, token_id, label, ens_name, owner, expire_time
 
 
 def NameRegisteredWithCostPremium(decoded_str):
@@ -229,16 +230,17 @@ def NameRegisteredWithCostPremium(decoded_str):
     param: uint256 baseCost
     param: uint256 premium
     param: uint256 expires
-    return node, token_id, label, name, owner, expire_time
+    return node, token_id, label, ens_name, owner, expire_time
     '''
     decoded_data = json.loads(decoded_str)
     name = decoded_data[0]
+    ens_name = format("{}.eth", name)
     label = decoded_data[1]
     token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[5]
     node = bytes32_to_nodehash(label)
-    return node, token_id, label, name, owner, expire_time
+    return node, token_id, label, ens_name, owner, expire_time
 
 
 def AddressChanged(decoded_str):
