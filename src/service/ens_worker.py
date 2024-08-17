@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 16:33:17
+LastEditTime: 2024-08-17 16:34:37
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -161,6 +161,35 @@ ignore_method = {
 # namehash('eth') = 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae
 ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 COIN_TYPE_ETH = "60"
+
+
+def TextChanged(decoded_str):
+    '''
+    description: TextChanged(bytes32,string,string)
+    param: bytes32 node
+    param: string indexedKey
+    param: string key
+    return node, key
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    key = decoded_data[2]
+    return node, key
+
+def TextChanged_KeyValue(decoded_str):
+    '''
+    description: TextChanged(bytes32,string,string,string)
+    param: bytes32 node
+    param: string indexedKey
+    param: string key
+    param: string value
+    return node, key, value
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    key = decoded_data[2]
+    value = decoded_data[3]
+    return node, key, value
 
 
 def uint256_to_bytes32(value):
