@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 16:57:17
+LastEditTime: 2024-08-17 17:06:50
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -50,11 +50,6 @@ NAME_REGISTERED_ID_OWNER_EXPIRES = "0xb3d987963d01b2f68493b4bdb130988f157ea43070
 NAME_REGISTERED_NAME_LABEL_OWNER_EXPIRES = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f"
 # NameRegistered (string name, bytes32 label, address owner, uint256 baseCost, uint256 premium, uint256 expires)
 NAME_REGISTERED_NEW = "0x69e37f151eb98a09618ddaa80c8cfaf1ce5996867c489f45b555b412271ebf27"
-
-# Reverse Registrar (ignored)
-REVERSE_REGISTRAR_CLAIM_RESOLVER = "0x0f5a5466" # Claim With Resolver (owner, resolver)
-REVERSE_REGISTRAR_CLAIM_OWNER = "0x1e83409a" # Claim (owner)
-REVERSE_REGISTRAR_NODE = "0xbffbe61c" # Node (addr)
 
 # SetName(bytes address,string name)
 SET_NAME = "0xc47f0027"
@@ -117,6 +112,10 @@ FUSES_SET = "0x39873f00c80f4f94b7bd1594aebcf650f003545b74824d57ddf4939e3ff3a34b"
 # ExpiryExtended (bytes32 node, uint64 expiry)
 EXPIRY_EXTENDED = "0xf675815a0817338f93a7da433f6bd5f5542f1029b11b455191ac96c7f6a9b132"
 
+# Reverse Registrar (ignored)
+REVERSE_REGISTRAR_CLAIM_RESOLVER = "0x0f5a5466" # Claim With Resolver (owner, resolver)
+REVERSE_REGISTRAR_CLAIM_OWNER = "0x1e83409a" # Claim (owner)
+REVERSE_REGISTRAR_NODE = "0xbffbe61c" # Node (addr)
 
 # Ignored methods
 CONTROLLER_ADDED = "0x0a8bb31534c0ed46f380cb867bd5c803a189ced9a764e30b3a4991a9901d7474"
@@ -241,6 +240,20 @@ def NameRegisteredWithCostPremium(decoded_str):
     expire_time = decoded_data[5]
     node = bytes32_to_nodehash(label)
     return node, token_id, label, ens_name, owner, expire_time
+
+
+def SetName(decoded_str):
+    '''
+    description: SetName(bytes address,string name)
+    example: ["0xc157bb70a20d5d24cdacee450f12e77fa4ff01a1", "yousssef.eth"]
+    param: bytes32 address
+    param: string name
+    return address, ens_name
+    '''
+    decoded_data = json.loads(decoded_str)
+    address = decoded_data[0]
+    ens_name = decoded_data[1]
+    return address, ens_name
 
 
 def AddressChanged(decoded_str):
