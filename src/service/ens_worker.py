@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 19:11:35
+LastEditTime: 2024-08-19 19:12:41
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -329,33 +329,6 @@ def NameRenewedName(decoded_str):
     return node, token_id, label, ens_name, expire_time
 
 
-def AddressChanged(decoded_str):
-    '''
-    description: AddressChanged(bytes32,uint256,bytes)
-    param: bytes32 node
-    param: uint256 coinType
-    param: bytes newAddress
-    return node, coin_type, new_address
-    '''
-    decoded_data = json.loads(decoded_str)
-    node = decoded_data[0]
-    coin_type = decoded_data[1]
-    new_address = decoded_data[2]
-    return node, coin_type, new_address
-
-def AddrChanged(decoded_str):
-    '''
-    description: AddrChanged(bytes32,address)
-    param: bytes32 node
-    param: bytes newAddress
-    return node, new_address
-    '''
-    decoded_data = json.loads(decoded_str)
-    node = decoded_data[0]
-    new_address = decoded_data[1]
-    return node, new_address
-
-
 def TextChanged(decoded_str):
     '''
     description: TextChanged(bytes32,string,string)
@@ -449,6 +422,33 @@ def NewOwner(decoded_str):
 
     # if reverse is True, node is reverse_node
     return reverse, p_node, node, token_id, label, owner
+
+
+def AddressChanged(decoded_str):
+    '''
+    description: AddressChanged(bytes32,uint256,bytes)
+    param: bytes32 node
+    param: uint256 coinType
+    param: bytes newAddress
+    return node, coin_type, new_address
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    coin_type = decoded_data[1]
+    new_address = decoded_data[2]
+    return node, coin_type, new_address
+
+def AddrChanged(decoded_str):
+    '''
+    description: AddrChanged(bytes32,address)
+    param: bytes32 node
+    param: bytes newAddress
+    return node, new_address
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    new_address = decoded_data[1]
+    return node, new_address
 
 
 def uint256_to_bytes32(value):
