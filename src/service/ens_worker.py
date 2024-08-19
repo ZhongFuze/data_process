@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 18:57:54
+LastEditTime: 2024-08-19 19:11:35
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -415,6 +415,40 @@ def NewResolver(decoded_str):
     node = decoded_data[0]
     resolver = decoded_data[1] # Public Resolver or Custom Contract
     return node, resolver
+
+
+def NewOwner(decoded_str):
+    '''
+    description: NewOwner (bytes32 node, bytes32 label, address owner)
+    example:
+        [
+            "0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2",
+            "0x832ac96279fefefc70e12b13502c688167b593657d5f0e5e414799c16372706b",
+            "0xe07b4970a050401a0f65b175f883f34ca8990cc3"
+        ],
+        [
+            "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae",
+            "0x67bab723183c76596e9425bcecd2da6995a53bea4d0df8a825c63b719dfbe856",
+            "0x7c043bcb3478e00781f33aff4cb97d9f7cf5c56f"
+        ]
+    param: bytes32 node
+    param: bytes32 label
+    param: address owner
+    return reverse, parent_node, node, token_id, label, owner
+    '''
+    decoded_data = json.loads(decoded_str)
+    reverse = False
+    p_node = decoded_data[0]
+    if p_node == ADDR_REVERSE_NODE:
+        reverse = True
+
+    label = decoded_data[1]
+    token_id = bytes32_to_uint256(label)
+    node = bytes32_to_nodehash(ADDR_REVERSE_NODE, label)
+    owner = decoded_data[2]
+
+    # if reverse is True, node is reverse_node
+    return reverse, p_node, node, token_id, label, owner
 
 
 def uint256_to_bytes32(value):
