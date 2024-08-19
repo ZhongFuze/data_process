@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 17:35:51
+LastEditTime: 2024-08-19 18:35:40
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -182,7 +182,7 @@ def NameRegisteredIdOwner(decoded_str):
     label = uint256_to_bytes32(token_id)
     owner = decoded_data[1]
     expire_time = decoded_data[2]
-    node = bytes32_to_nodehash(label)
+    node = bytes32_to_nodehash(ETH_NODE, label)
     return node, token_id, label, owner, expire_time
 
 
@@ -210,7 +210,7 @@ def NameRegisteredNameLabelOwner(decoded_str):
     token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[4]
-    node = bytes32_to_nodehash(label)
+    node = bytes32_to_nodehash(ETH_NODE, label)
     return node, token_id, label, ens_name, owner, expire_time
 
 
@@ -240,7 +240,7 @@ def NameRegisteredWithCostPremium(decoded_str):
     token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[5]
-    node = bytes32_to_nodehash(label)
+    node = bytes32_to_nodehash(ETH_NODE, label)
     return node, token_id, label, ens_name, owner, expire_time
 
 
@@ -300,7 +300,7 @@ def NameRenewedID(decoded_str):
     token_id = decoded_data[0]
     label = uint256_to_bytes32(token_id)
     expire_time = decoded_data[1]
-    node = bytes32_to_nodehash(label)
+    node = bytes32_to_nodehash(ETH_NODE, label)
     return node, token_id, label, expire_time
 
 
@@ -325,7 +325,7 @@ def NameRenewedName(decoded_str):
     label = decoded_data[1]
     token_id = bytes32_to_uint256(label)
     expire_time = decoded_data[3]
-    node = bytes32_to_nodehash(label)
+    node = bytes32_to_nodehash(ETH_NODE, label)
     return node, token_id, label, ens_name, expire_time
 
 
@@ -385,6 +385,22 @@ def TextChanged_KeyValue(decoded_str):
     return node, key, value
 
 
+def ContenthashChanged(decoded_str):
+    '''
+    description: ContenthashChanged (bytes32 node, bytes hash)
+    example: [
+        "0x839586eb966b65fb75f7f2819a4b9531b5e48b54f1a9267d3848d11321e99355",
+        "0xe30101701220301f45a4a2de0ea2aef091017fb9b5e79adc5727a9e51f07bc62c7aad4736c94"]
+    param: bytes32 node
+    param: bytes hash
+    return node, contenthash
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    contenthash = decoded_data[1]
+    return node, contenthash
+
+
 def uint256_to_bytes32(value):
     '''
     description: uint256_to_bytes32
@@ -408,7 +424,7 @@ def bytes32_to_uint256(value):
     return str(int(trim_value, 16))
 
 
-def bytes32_to_nodehash(value):
+def bytes32_to_nodehash(base_node, value):
     '''
     description: bytes32_to_nodehash
     param: value bytes32 type(label)=bytes32
@@ -416,7 +432,7 @@ def bytes32_to_nodehash(value):
     '''
     # Calculate nodehash: keccak256(abi.encodePacked(base_node, label))
     label_bytes = to_bytes(hexstr=value)
-    base_node_bytes = to_bytes(hexstr=ETH_NODE)
+    base_node_bytes = to_bytes(hexstr=base_node)
 
     # concatenating base_node and label
     packed_data = base_node_bytes + label_bytes
@@ -433,7 +449,7 @@ class Worker():
     def __init__(self):
         pass
     def save_to_storage(self, data, cursor):
-        # id,name,label,namenode,is_wrappered,token_id,parent_id,registration_time,expired_time,resolver,owner,resolved_address,reverse_address,key_value,update_time
+        # id,name,label,namenode,is_wrappered,token_id,parent_node,registration_time,expired_time,resolver,owner,resolved_address,reverse_address,key_value,update_time
         pass
 
     def transaction_process(self, records):
