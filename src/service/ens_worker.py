@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 19:12:41
+LastEditTime: 2024-08-19 20:05:05
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -451,6 +451,119 @@ def AddrChanged(decoded_str):
     return node, new_address
 
 
+# TransferBatch (address operator, address from, address to, uint256[] ids, uint256[] values)
+TRANSFER_BATCH = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
+# TransferSingle (address operator, address from, address to, uint256 id, uint256 value)
+TRANSFER_SINGLE = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
+# Method[Set Owner] Transfer (bytes32 node, address owner)
+TRANSFER_TO = "0xd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266"
+# Transfer (address from, address to, index_topic_3 uint256 tokenId)
+# 0x0000000000000000000000000000000000000000 -> address (mint)
+# address -> 0x0000000000000000000000000000000000000000 (burn)
+TRANSFER_FROM_TO = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+def TransferBatch(decoded_str):
+    '''
+    description: TransferBatch (address operator, address from, address to, uint256[] ids, uint256[] values)
+    example:
+        [
+            "0x5e6a99d45dd5293e2896db9ba9bac7fb6fcf0b64",
+            "0x5e6a99d45dd5293e2896db9ba9bac7fb6fcf0b64",
+            "0xa0ec2733e8aef26dab0be9abfbacd9ef337740e3",
+            [
+                "72047526858619285734660861045880420335953311984491748223006482257223360780900",
+                "106589836509572227534488257676472723233384235269858735406977842653962322051550"
+            ],
+            [
+                "1",
+                "1"
+            ]
+        ]
+    param: bytes32 operator
+    param: bytes from
+    param: bytes to
+    param: uint256[] ids
+    param: uint256[] values
+    return list of [node, token_id, label, new_owner]
+    '''
+    return_data = []
+    decoded_data = json.loads(decoded_str)
+    to_address = decoded_data[2]
+    ids = decoded_data[3]
+    for token_id in ids:
+        label = uint256_to_bytes32(token_id)
+        node = bytes32_to_nodehash(ETH_NODE, label)
+        return_data.append([node, token_id, label, to_address])
+
+    return return_data
+
+
+def TransferSingle(decoded_str):
+    '''
+    description: TransferSingle (address operator, address from, address to, uint256 id, uint256 value)
+    example:
+        [
+            "0x253553366da8546fc250f225fe3d25d0c782303b",
+            "0x0000000000000000000000000000000000000000",
+            "0x88f09bdc8e99272588242a808052eb32702f88d0",
+            "62833728218626205024343717462787738700280122481086862666915168828842036205452",
+            "1"
+        ]
+    param: bytes32 operator
+    param: bytes from
+    param: bytes to
+    param: uint256 id
+    param: uint256 value
+    return node, token_id, label, new_owner
+    '''
+    decoded_data = json.loads(decoded_str)
+    to_address = decoded_data[2]
+    token_id = decoded_data[3]
+    label = uint256_to_bytes32(token_id)
+    node = bytes32_to_nodehash(ETH_NODE, label)
+    return node, token_id, label, to_address
+
+
+def TransferTo(decoded_str):
+    '''
+    description: Transfer (bytes32 node, address owner)
+    example:
+        [
+            "0x59bf3471237655ae3daba6bbec4049890e8deb78533b6b6f2005e86bbfd77a11",
+            "0x7114990491b5cb2fd1cb8bc997237cc4e030b641"
+        ]
+    param: bytes32 node
+    param: bytes owner
+    return node, new_owner
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    owner = decoded_data[1]
+    return node, owner
+
+
+def TransferFromTo(decoded_str):
+    '''
+    description: Transfer (address from, address to, index_topic_3 uint256 tokenId)
+    example:
+        [
+            "0x0000000000000000000000000000000000000000",
+            "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+            "74219646587811813780887972564261792696814626464444903917889608774226759192108"
+        ]
+    param: bytes32 node
+    param: bytes owner
+    return node, token_id, label, new_owner
+    '''
+    decoded_data = json.loads(decoded_str)
+    to_address = decoded_data[1]
+    token_id = decoded_data[2]
+    label = uint256_to_bytes32(token_id)
+    node = bytes32_to_nodehash(ETH_NODE, label)
+    return node, token_id, label, to_address
+
+
 def uint256_to_bytes32(value):
     '''
     description: uint256_to_bytes32
@@ -499,7 +612,9 @@ class Worker():
     def __init__(self):
         pass
     def save_to_storage(self, data, cursor):
-        # id,name,label,namenode,is_wrappered,token_id,parent_node,registration_time,expired_time,resolver,owner,resolved_address,reverse_address,key_value,update_time
+        # id,name,label,namenode,is_wrappered,token_id,parent_node,fuses,registration_time,expired_time,resolver,owner,resolved_address,reverse_address,key_value,update_time
+        # also need to change record for this table
+        # 
         pass
 
     def transaction_process(self, records):
