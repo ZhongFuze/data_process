@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 18:35:40
+LastEditTime: 2024-08-19 18:57:54
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -399,6 +399,22 @@ def ContenthashChanged(decoded_str):
     node = decoded_data[0]
     contenthash = decoded_data[1]
     return node, contenthash
+
+
+def NewResolver(decoded_str):
+    '''
+    description: NewResolver (bytes32 node, address resolver)
+    example: [
+        "0xcf25094f92f3378c1060afbeb3ff29aa765f342f643097a8b3afe288d18a25b0",
+        "0x231b0ee14048e9dccd1d247744d114a4eb5e8e63"]
+    param: bytes32 node
+    param: address resolver
+    return node, resolver
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    resolver = decoded_data[1] # Public Resolver or Custom Contract
+    return node, resolver
 
 
 def uint256_to_bytes32(value):
