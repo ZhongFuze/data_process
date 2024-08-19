@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 21:55:03
+LastEditTime: 2024-08-19 22:05:30
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -98,9 +98,6 @@ TRANSFER_TO = "0xd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d26
 # address -> 0x0000000000000000000000000000000000000000 (burn)
 TRANSFER_FROM_TO = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
-DNS_RECORD_CHANGED = "0x52a608b3303a48862d07a73d82fa221318c0027fbbcfb1b2329bface3f19ff2b"
-DNS_ZONE_CLEARED = "0xb757169b8492ca2f1c6619d9d76ce22803035c3b1d5f6930dffe7b127c1a1983"
-
 # NameWrapped (bytes32 node, bytes name, address owner, uint32 fuses, uint64 expiry)
 NAME_WRAPPED = "0x8ce7013e8abebc55c3890a68f5a27c67c3f7efa64e584de5fb22363c606fd340"
 # NameUnwrapped (bytes32 node, address owner)
@@ -116,6 +113,10 @@ EXPIRY_EXTENDED = "0xf675815a0817338f93a7da433f6bd5f5542f1029b11b455191ac96c7f6a
 REVERSE_REGISTRAR_CLAIM_RESOLVER = "0x0f5a5466" # Claim With Resolver (owner, resolver)
 REVERSE_REGISTRAR_CLAIM_OWNER = "0x1e83409a" # Claim (owner)
 REVERSE_REGISTRAR_NODE = "0xbffbe61c" # Node (addr)
+
+# Set DNS Records (ignored)
+DNS_RECORD_CHANGED = "0x52a608b3303a48862d07a73d82fa221318c0027fbbcfb1b2329bface3f19ff2b"
+DNS_ZONE_CLEARED = "0xb757169b8492ca2f1c6619d9d76ce22803035c3b1d5f6930dffe7b127c1a1983"
 
 # Ignored methods
 CONTROLLER_ADDED = "0x0a8bb31534c0ed46f380cb867bd5c803a189ced9a764e30b3a4991a9901d7474"
@@ -155,6 +156,10 @@ ignore_method = {
     REVERSE_REGISTRAR_CLAIM_RESOLVER: "0x0f5a5466", # Claim With Resolver (owner, resolver)
     REVERSE_REGISTRAR_CLAIM_OWNER: "0x1e83409a", # Claim (owner)
     REVERSE_REGISTRAR_NODE: "0xbffbe61c", # Node (addr)
+
+    # Set DNS Records (ignored)
+    DNS_RECORD_CHANGED: "DNSRecordChanged(bytes32,bytes,uint16,bytes)",
+    DNS_ZONE_CLEARED: "DnsZoneCleared"
 }
 
 # namehash('eth') = 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae
@@ -598,6 +603,45 @@ def NameUnwrapped(decoded_str):
     node = decoded_data[0]
     owner = decoded_data[1]
     return is_wrapped, node, owner
+
+
+# Set Child Fuses
+# FusesSet (bytes32 node, uint32 fuses)
+FUSES_SET = "0x39873f00c80f4f94b7bd1594aebcf650f003545b74824d57ddf4939e3ff3a34b"
+# ExpiryExtended (bytes32 node, uint64 expiry)
+EXPIRY_EXTENDED = "0xf675815a0817338f93a7da433f6bd5f5542f1029b11b455191ac96c7f6a9b132"
+
+def FusesSet(decoded_str):
+    '''
+    description: FusesSet (bytes32 node, uint32 fuses)
+    example:
+        ["0x236c7b5d97ddd1fb29b91eeef8dab8a0a312a99da38a181db687cca25e9aca80",196617]
+        ["0x054efb5c5bc1720e1eabc3b4781df624d27621f525d4d958e967cc0bcee720f2",65536]
+        ["0xa8e52518362fe90ab13ccf8e321dedf4e6ddf3d979f5ffcd342b3c6a4c539908",327680]
+        ["0x8304549ef3e89880b3fe105c9b517c4041270f79a85eb0ebabd47093e9c427c5",196609]
+    param: bytes32 node
+    param: uint32 fuses
+    return node, fuses
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    fuses = decoded_data[1]
+    return node, fuses
+
+
+def ExpiryExtended(decoded_str):
+    '''
+    description: ExpiryExtended (bytes32 node, uint64 expiry)
+    example:
+        ["0xd5a7ec68a3cd72615ab8d2db3fc642e2a02c1d9baf5d57087d91f5a441a402b9","1778009722"]
+    param: bytes32 node
+    param: uint64 expiry
+    return node, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    expire_time = decoded_data[1]
+    return node, expire_time
 
 
 # Set DNS Records
