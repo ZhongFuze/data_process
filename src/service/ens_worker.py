@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 20:05:05
+LastEditTime: 2024-08-19 21:55:03
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -417,7 +417,7 @@ def NewOwner(decoded_str):
 
     label = decoded_data[1]
     token_id = bytes32_to_uint256(label)
-    node = bytes32_to_nodehash(ADDR_REVERSE_NODE, label)
+    node = bytes32_to_nodehash(p_node, label)
     owner = decoded_data[2]
 
     # if reverse is True, node is reverse_node
@@ -449,18 +449,6 @@ def AddrChanged(decoded_str):
     node = decoded_data[0]
     new_address = decoded_data[1]
     return node, new_address
-
-
-# TransferBatch (address operator, address from, address to, uint256[] ids, uint256[] values)
-TRANSFER_BATCH = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
-# TransferSingle (address operator, address from, address to, uint256 id, uint256 value)
-TRANSFER_SINGLE = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
-# Method[Set Owner] Transfer (bytes32 node, address owner)
-TRANSFER_TO = "0xd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266"
-# Transfer (address from, address to, index_topic_3 uint256 tokenId)
-# 0x0000000000000000000000000000000000000000 -> address (mint)
-# address -> 0x0000000000000000000000000000000000000000 (burn)
-TRANSFER_FROM_TO = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
 
 def TransferBatch(decoded_str):
@@ -564,6 +552,76 @@ def TransferFromTo(decoded_str):
     return node, token_id, label, to_address
 
 
+def NameWrapped(decoded_str):
+    '''
+    description: NameWrapped (bytes32 node, bytes name, address owner, uint32 fuses, uint64 expiry)
+    example:
+        [
+            "0x6f902d600ad25ef650bb40954aa6b5c8b7aca68da298e1b2e7c0603ccc361421",
+            "0x0c656e736973617765736f6d650365746800",
+            "0x866b3c4994e1416b7c738b9818b31dc246b95eee",
+            196608,
+            "1720239671"
+        ]
+    param: bytes32 node
+    param: bytes name
+    param: bytes owner
+    param: uint32 fuses
+    param: uint64 expiry
+    return is_wrapped, node, ens_name, owner, fuses, expire_time
+    '''
+    decoded_data = json.loads(decoded_str)
+    is_wrapped = True
+    node = decoded_data[0]
+    bytes_name = decoded_data[1]  # endswith .eth
+    ens_name = decode_dns_style_name(bytes_name)
+    owner = decoded_data[2]
+    fuses = decoded_data[3]
+    expire_time = decoded_data[4]
+    return is_wrapped, node, ens_name, owner, fuses, expire_time
+
+
+def NameUnwrapped(decoded_str):
+    '''
+    description: NameUnwrapped (bytes32 node, address owner)
+    example:
+        [
+            "0x1738cdcecdd9c1265ee1ec952f98ae6f3d204da358f9b3c855947a3a137da3eb",
+            "0x54a01eeae94976527a13104da89db4708c19bc9d"
+        ]
+    param: bytes32 node
+    param: bytes owner
+    return node, owner
+    '''
+    is_wrapped = False
+    decoded_data = json.loads(decoded_str)
+    node = decoded_data[0]
+    owner = decoded_data[1]
+    return is_wrapped, node, owner
+
+
+# Set DNS Records
+def DnsRecordChanged():
+    '''
+    description: DNSRecordChanged (bytes32 node, bytes name, uint16 resource, bytes record)
+    example:
+        [
+            "0xe1868e4d7b6d82592b4e9cc7c20d56beb04664cf579405c57ad062093d0c4605",
+            "0x014006617274656533046B72656400",
+            "1",
+            "014006617274656533046B72656400000100010000012C0004C09BDF6E"
+        ]
+    param: bytes32 node
+    param: bytes owner
+    return node, token_id, label, new_owner
+    '''
+    pass
+
+
+def DnsZoneCleared():
+    pass
+
+
 def uint256_to_bytes32(value):
     '''
     description: uint256_to_bytes32
@@ -573,7 +631,8 @@ def uint256_to_bytes32(value):
     # token ID uint256
     # bytes32 address
     # Convert the integer to a 64-character hexadecimal string (32 bytes)
-    return '0x' + format(value, '064x')
+    int_value = int(value)
+    return '0x' + format(int_value, '064x')
 
 def bytes32_to_uint256(value):
     '''
@@ -603,6 +662,25 @@ def bytes32_to_nodehash(base_node, value):
     # Compute keccak256 hash (equivalent to Solidity's keccak256 function)
     nodehash = keccak(packed_data)
     return encode_hex(nodehash)
+
+
+def decode_dns_style_name(value):
+    '''
+    description: Decode the DNS-style name
+    param: string value
+    return name
+    '''
+    hex_data = to_bytes(hexstr=value)
+    decoded = []
+    i = 0
+    while i < len(hex_data):
+        length = hex_data[i]
+        if length == 0:
+            break
+        i += 1
+        decoded.append(hex_data[i:i + length].decode('ascii'))
+        i += length
+    return '.'.join(decoded)
 
 
 class Worker():
