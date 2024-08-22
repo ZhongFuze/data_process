@@ -736,22 +736,45 @@ def bytes32_to_nodehash(base_node, value):
     return encode_hex(nodehash)
 
 
+# def decode_dns_style_name(value):
+#     '''
+#     description: Decode the DNS-style name
+#     param: string value
+#     return name
+#     '''
+#     hex_data = to_bytes(hexstr=value)
+#     decoded = []
+#     i = 0
+#     while i < len(hex_data):
+#         length = hex_data[i]
+#         if length == 0:
+#             break
+#         i += 1
+#         decoded.append(hex_data[i:i + length].decode('ascii'))
+#         i += length
+#     return '.'.join(decoded)
+
+
 def decode_dns_style_name(value):
     '''
     description: Decode the DNS-style name
     param: string value
-    return name
+    return: decoded DNS name
     '''
     hex_data = to_bytes(hexstr=value)
     decoded = []
     i = 0
+
     while i < len(hex_data):
         length = hex_data[i]
         if length == 0:
             break
         i += 1
-        decoded.append(hex_data[i:i + length].decode('ascii'))
+
+        segment = hex_data[i:i + length].decode('utf-8', errors='replace')  # 'replace' will handle invalid sequences
+        decoded.append(segment)
         i += length
+
     return '.'.join(decoded)
 
 
