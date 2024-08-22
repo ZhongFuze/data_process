@@ -778,6 +778,107 @@ def decode_dns_style_name(value):
     return '.'.join(decoded)
 
 
+def unix_string_to_datetime(value):
+    '''
+    description: parse unix_string to datetime format "%Y-%m-%d %H:%M:%S"
+    return {*}
+    '''
+    unix_i64 = int(value)
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(unix_i64))
+
+
+def keccak256(data):
+    '''Function to compute the keccak256 hash (equivalent to sha3)'''
+    return keccak(data)
+
+
+def compute_namehash(name):
+    node = b'\x00' * 32  # 32 bytes of zeroes (initial nodehash for the root)
+    parent_node = b'\x00' * 32
+    self_label = ""
+    self_node = ""
+    items = name.split('.')
+    subname = items[0]
+    for item in reversed(items):
+        label_hash = keccak256(item.encode('utf-8'))
+        subname = item
+        parent_node = copy.deepcopy(node)
+        node = keccak256(node + label_hash)  # keccak256 of node + label_hash
+        self_node = node
+
+    label_hash = keccak256(subname.encode('utf-8'))
+    self_label = encode_hex(label_hash)
+    erc721_token_id = bytes32_to_uint256(self_label)
+    erc1155_token_id = bytes32_to_uint256(encode_hex(self_node))
+    return encode_hex(parent_node), self_label, erc721_token_id, erc1155_token_id, encode_hex(self_node)
+
+def compute_namehash_nowrapped(name):
+    node = b'\x00' * 32  # 32 bytes of zeroes (initial nodehash for the root)
+    parent_node = b'\x00' * 32
+    self_token_id = ""
+    self_label = ""
+    self_node = ""
+    items = name.split('.')
+    subname = items[0]
+    for item in reversed(items):
+        label_hash = keccak256(item.encode('utf-8'))
+        subname = item
+        parent_node = copy.deepcopy(node)
+        node = keccak256(node + label_hash)  # keccak256 of node + label_hash
+        self_node = node
+
+    label_hash = keccak256(subname.encode('utf-8'))
+    self_label = encode_hex(label_hash)
+    self_token_id = bytes32_to_uint256(self_label)
+    return encode_hex(parent_node), self_label, self_token_id, encode_hex(self_node)
+
+# 0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63
+# ENS: Public Resolver can compute by this function
+def compute_namehash_wrapped(name):
+    '''Function to calculate the ENS namehash'''
+    node = b'\x00' * 32  # 32 bytes of zeroes (initial nodehash for the root)
+    parent_node = b'\x00' * 32
+    self_token_id = ""
+    self_label = ""
+    self_node = ""
+    items = name.split('.')
+    subname = items[0]
+    for item in reversed(items):
+        label_hash = keccak256(item.encode('utf-8'))
+        subname = item
+        parent_node = copy.deepcopy(node)
+        node = keccak256(node + label_hash)  # keccak256 of node + label_hash
+        self_node = node
+
+    label_hash = keccak256(subname.encode('utf-8'))
+    self_label = encode_hex(label_hash)
+    self_token_id = bytes32_to_uint256(encode_hex(self_node))
+    return encode_hex(parent_node), self_label, self_token_id, encode_hex(self_node)
+
+
+def sha3HexAddress(addr):
+    '''Function to compute the padded hexadecimal representation of the address and hash it'''
+    # Remove '0x' prefix and convert to lowercase
+    process_address = addr.lower().replace("0x", "")
+    # Zero-pad the address to 32 bytes (64 hex characters)
+    padded_address = process_address.zfill(64)
+    # Convert the padded address to bytes
+    padded_address_bytes = bytes.fromhex(padded_address)
+    return padded_address_bytes
+
+
+def compute_label_and_node(addr):
+    '''Calculate sha3HexAddress and namehash for reverse resolution'''
+    addr = addr.lower().replace("0x", "")
+    label = keccak256(addr.encode('utf-8'))
+
+    # calculate the node (namehash) as keccak256(ADDR_REVERSE_NODE + label)
+    addr_reverse_bytes = bytes.fromhex(ADDR_REVERSE_NODE[2:])  # Remove '0x' and convert to bytes
+    node = keccak256(addr_reverse_bytes + label)
+
+    return encode_hex(label), encode_hex(node)
+
+
 class Worker():
     '''
     description: Worker
