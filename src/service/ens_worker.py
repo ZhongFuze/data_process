@@ -902,10 +902,276 @@ class Worker():
                 # TODO: if ignore_method in transaction_hash, save or debug
                 print(f"transaction_hash {transaction_hash} ignore method {method_id}")
                 break
-            # if method_id == 
-            # nodehash
-            print(row["block_timestamp"], row["transaction_hash"], row["transaction_index"], row["contract_label"], row["log_index"], row["signature"], row["decoded"])
 
+            upsert_record.append({
+                "block_datetime": block_datetime,
+                "transaction_hash": transaction_hash,
+                "log_index": row["log_index"],
+                "contract_address": row["contract_address"],
+                "contract_label": row["contract_label"],
+                "symbol": signature
+            })
+            if method_id == NAME_REGISTERED_ID_OWNER_EXPIRES:
+                node, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredIdOwner(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["owner"] = owner
+                upsert_data[node]["expire_time"] = int(expire_time)
+                upsert_data[node]["registration_time"] = block_unix
+            elif method_id == NAME_REGISTERED_NAME_LABEL_OWNER_EXPIRES:
+                node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredNameLabelOwner(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["owner"] = owner
+                upsert_data[node]["expire_time"] = int(expire_time)
+                upsert_data[node]["registration_time"] = block_unix
+            elif method_id == NAME_REGISTERED_NEW:
+                node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredWithCostPremium(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["owner"] = owner
+                upsert_data[node]["expire_time"] = int(expire_time)
+                upsert_data[node]["registration_time"] = block_unix
+            elif method_id == SET_NAME:
+                reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node = SetName(decoded_str)
+                if reverse_node not in upsert_data:
+                    upsert_data[reverse_node] = {"namenode": reverse_node}
+                upsert_data[reverse_node]["namenode"] = reverse_node
+                upsert_data[reverse_node]["name"] = reverse_name
+                upsert_data[reverse_node]["label"] = reverse_label
+                upsert_data[reverse_node]["erc721_token_id"] = reverse_token_id
+                upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
+                upsert_data[reverse_node]["owner"] = reverse_address
+                upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
+                upsert_data[reverse_node]["expire_time"] = 0
+                upsert_data[reverse_node]["registration_time"] = block_unix
+                upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["parent_node"] = parent_node
+                upsert_data[node]["reverse_address"] = reverse_address
+
+            elif method_id == REVERSE_CLAIMED:
+                reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address = ReverseClaimed(decoded_str)
+                if reverse_node not in upsert_data:
+                    upsert_data[reverse_node] = {"namenode": reverse_node}
+                upsert_data[reverse_node]["namenode"] = reverse_node
+                upsert_data[reverse_node]["name"] = reverse_name
+                upsert_data[reverse_node]["label"] = reverse_label
+                upsert_data[reverse_node]["erc721_token_id"] = reverse_token_id
+                upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
+                upsert_data[reverse_node]["owner"] = reverse_address
+                upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
+                upsert_data[reverse_node]["expire_time"] = 0
+                upsert_data[reverse_node]["registration_time"] = block_unix
+                upsert_data[reverse_node]["reverse_address"] = reverse_address
+            elif method_id == NAME_CHANGED:
+                reverse_node, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node = NameChanged(decoded_str)
+                if reverse_node in upsert_data:
+                    # ReverseClaimed & NameChanged will appear together
+                    reverse_address = upsert_data[reverse_node]["reverse_address"]
+                    if node not in upsert_data:
+                        upsert_data[node] = {"namenode": node}
+                    upsert_data[node]["namenode"] = node
+                    upsert_data[node]["name"] = ens_name
+                    upsert_data[node]["label"] = label
+                    upsert_data[node]["erc721_token_id"] = erc721_token_id
+                    upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                    upsert_data[node]["parent_node"] = parent_node
+                    upsert_data[node]["reverse_address"] = reverse_address
+
+            elif method_id == NAME_RENEWED_UINT:
+                node, label, erc721_token_id, erc1155_token_id, expire_time = NameRenewedID(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["expire_time"] = int(expire_time)
+
+            elif method_id == NAME_RENEWED_STRING:
+                node, label, erc721_token_id, erc1155_token_id, ens_name, expire_time = NameRenewedName(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["expire_time"] = int(expire_time)
+
+            elif method_id == TEXT_CHANGED_KEY:
+                node, texts_key = TextChanged(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                if texts_key != "":
+                    if "key_value" not in upsert_data[node]:
+                        upsert_data[node]["key_value"] = {}
+                    upsert_data[node]["key_value"][texts_key] = ""
+            elif method_id == TEXT_CHANGED_KEY_VALUE:
+                node, texts_key, texts_val = TextChanged_KeyValue(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                if texts_key != "":
+                    if "key_value" not in upsert_data[node]:
+                        upsert_data[node]["key_value"] = {}
+                    upsert_data[node]["key_value"][texts_key] = texts_val
+            elif method_id == CONTENTHASH_CHANGED:
+                node, contenthash = ContenthashChanged(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["contenthash"] = contenthash
+
+            elif method_id == NEW_RESOLVER:
+                node, resolver = NewResolver(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["resolver"] = resolver
+            elif method_id == NEW_OWNER:
+                is_reverse, parent_node, node, label, erc721_token_id, erc1155_token_id, owner = NewOwner(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["parent_node"] = parent_node
+                upsert_data[node]["label"] = label
+                upsert_data[node]["owner"] = owner
+                if is_reverse is True:
+                    # update reverse_address in `NewOwner`
+                    reverse_address = owner
+                    reverse_label, reverse_node = compute_label_and_node(reverse_address)
+                    reverse_name = "[{}].addr.reverse".format(str(reverse_label).replace("0x", ""))
+                    reverse_token_id = bytes32_to_uint256(reverse_node)
+
+                    if reverse_node not in upsert_data:
+                        upsert_data[reverse_node] = {"namenode": reverse_node}
+                    upsert_data[reverse_node]["namenode"] = reverse_node
+                    upsert_data[reverse_node]["name"] = reverse_name
+                    upsert_data[reverse_node]["label"] = reverse_label
+                    upsert_data[reverse_node]["erc721_token_id"] = reverse_token_id
+                    upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
+                    upsert_data[reverse_node]["owner"] = reverse_address
+                    upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
+                    upsert_data[reverse_node]["expire_time"] = 0
+                    upsert_data[reverse_node]["registration_time"] = block_unix
+                    upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+            elif method_id == ADDR_CHANGED:
+                node, new_address = AddrChanged(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                # upsert_data[node]["coin_type"] = COIN_TYPE_ETH
+                upsert_data[node]["resolved_address"] = new_address
+            elif method_id == ADDRESS_CHANGED:
+                node, coin_type, new_address = AddressChanged(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+
+                # resolved_records
+                upsert_data[node]["namenode"] = node
+                if "resolved_records" not in upsert_data[node]:
+                    upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
+                upsert_data[node]["resolved_records"][str(coin_type)] = new_address
+
+            elif method_id == TRANSFER_BATCH:
+                # list of [node, erc1155_token_id, new_owner]
+                transfer_data = TransferBatch(decoded_str)
+                for transfer_items in transfer_data:
+                    transfer_node = transfer_items[0]      # new_node
+                    transfer_token_id = transfer_items[1]  # erc1155_token_id
+                    transfer_owner = transfer_items[2]     # to_address
+                    if transfer_node not in upsert_data:
+                        upsert_data[transfer_node] = {"namenode": transfer_node}
+                    upsert_data[transfer_node]["namenode"] = transfer_node
+                    upsert_data[transfer_node]["erc1155_token_id"] = transfer_token_id
+                    upsert_data[transfer_node]["owner"] = transfer_owner
+            elif method_id == TRANSFER_SINGLE:
+                node, erc1155_token_id, to_address = TransferSingle(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["owner"] = to_address
+            elif method_id == TRANSFER_TO:
+                node, owner = TransferTo(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["owner"] = owner
+            elif method_id == TRANSFER_FROM_TO:
+                node, label, erc721_token_id, erc1155_token_id, to_address = TransferFromTo(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["owner"] = to_address
+
+            elif method_id == NAME_WRAPPED:
+                node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node, is_wrapped, fuses, grace_period_ends, owner = NameWrapped(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label"] = label
+                upsert_data[node]["erc721_token_id"] = erc721_token_id
+                upsert_data[node]["erc1155_token_id"] = erc1155_token_id
+                upsert_data[node]["parent_node"] = parent_node
+                upsert_data[node]["is_wrapped"] = is_wrapped
+                upsert_data[node]["fuses"] = int(fuses)
+                upsert_data[node]["grace_period_ends"] = int(grace_period_ends)
+                upsert_data[node]["owner"] = owner
+            elif method_id == NAME_UNWRAPPED:
+                node, is_wrapped, owner = NameUnwrapped(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["is_wrapped"] = is_wrapped
+                upsert_data[node]["owner"] = owner
+            elif method_id == FUSES_SET:
+                node, fuses = FusesSet(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["fuses"] = int(fuses)
+            elif method_id == EXPIRY_EXTENDED:
+                node, grace_period_ends = ExpiryExtended(decoded_str)
+                node, fuses = FusesSet(decoded_str)
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["grace_period_ends"] = int(grace_period_ends)
+
+            # print(row["block_timestamp"], row["log_index"], row["contract_label"], row["signature"])
+
+        upsert_data["update_time"] = block_unix
+        if is_ignore is False:
+            pprint(upsert_data)
+        else:
+            print("Ignored....\n")
     def daily_read_storage(self, date, cursor):
         return []
 
@@ -920,9 +1186,9 @@ class Worker():
         return record_df
 
     def pipeline(self, date):
-        conn = psycopg2.connect(setting.PG_DSN["ens"])
-        conn.autocommit = True
-        cursor = conn.cursor()
+        # conn = psycopg2.connect(setting.PG_DSN["ens"])
+        # conn.autocommit = True
+        # cursor = conn.cursor()
 
         record_df = self.daily_read_test(date)
         # Sort by block_timestamp
@@ -932,16 +1198,70 @@ class Worker():
 
         for transaction_hash, group in grouped:
             # Sort transaction_index and log_index
-            if transaction_hash == "0xc545ab5656ac21047c098ba1b21381ea85f8d71b3e33fac51f155205f7f902b4":
-                sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
-                length = len(sorted_group)
-                print(transaction_hash, length)
-                self.transaction_process(sorted_group)
-            # sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
-            # length = len(sorted_group)
-            # if length > 3:
-            #     print(transaction_hash, len(sorted_group))
-            #     # self.transaction_process(sorted_group)
+            # if transaction_hash == "0x702930e5682b781bfea735f7df1022f6a10c2daf8278d222065d820cb64995e3":
+            #     sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
+            #     length = len(sorted_group)
+            #     print(transaction_hash, length)
+            #     self.transaction_process(sorted_group)
+            #     break
+            sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
+            length = len(sorted_group)
+            print(transaction_hash, length)
+            self.transaction_process(sorted_group)
+
 
 if __name__ == "__main__":
-    Worker().pipeline("2020-02-10")
+    Worker().pipeline("2023-05-04.sample")
+
+    # parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped("wujunlin.eth")
+    # print(f"parent_node: {parent_node}")
+    # print(f"self_label: {self_label}")
+    # print(f"self_token_id: {self_token_id}")
+    # print(f"self_node: {self_node}")
+
+    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("wujunlin.eth")
+    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("juampi.base.eth")
+    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("tony.base.eth")
+    # parent_node, self_label, self_token_id, self_node = compute_namehash("zzfzz.eth")
+    # parent_node, self_label, self_token_id, self_node = compute_namehash("zzfzz.eth")
+    # print(f"parent_node: {parent_node}")
+    # print(f"self_label: {self_label}")
+    # print(f"self_token_id: {self_token_id}")
+    # print(f"self_node: {self_node}")
+
+
+    # # Example usage
+    # the_address = "0xb86ff7e3f4e6186dfd25cff40605441d0c0481c4"
+
+    # the_label, the_node = compute_label_and_node(the_address)
+
+    # # Output the results
+    # print(f"Label: {the_label}")
+    # print(f"Node: {the_node}")
+
+    # reverse_name = "[{}].addr.reverse".format(str(the_label).replace("0x", ""))
+    # reverse_token_id = bytes32_to_uint256(the_node)
+    # print(f"id: {reverse_token_id}")
+    # print(f"name: {reverse_name}")
+
+    # 0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401
+    # decoded_str = '["0x6602a757e5aaf7980c14f17d9fcd1e012633dca97716efdd621c847bb0af2e6b", "0x0efddf037f9c48c9414ea4c95f52262d1dc6be5ba23932ef34e449808fd886ef", "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401"]'
+    # reverse, p_node, node, token_id, label, owner = NewOwner(decoded_str)
+    # print(reverse, p_node, node, token_id, label, owner)
+
+    # decoded_str = '["0x934b510d4c9103e6a87aef13b816fb080286d649", "0x0000000000000000000000000000000000000000", "0x934b510d4c9103e6a87aef13b816fb080286d649","80067465505413127536911696284953332658080992976543000343815247511973242098412","1"]'
+    # node, token_id, to_address = TransferSingle(decoded_str)
+    # print(node, token_id, to_address)
+
+    # anthony-.eth 08616E74686F6E792D0365746800
+    # niconico.eth 086E69636F6E69636F0365746800
+    # bytes_name = "0x" + "086E69636F6E69636F0365746800".lower()
+    # 05E2889174680365746800 ∑th
+    # bytes_name = "0x" + "05E2889174680365746800".lower()
+    # ens_name = decode_dns_style_name(bytes_name)
+    # print(ens_name)
+    # parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped(ens_name)
+    # print(f"parent_node: {parent_node}")
+    # print(f"self_label: {self_label}")
+    # print(f"self_token_id: {self_token_id}")
+    # print(f"self_node: {self_node}")
