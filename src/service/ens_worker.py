@@ -916,6 +916,7 @@ class Worker():
         record_df = pd.read_csv(data_dirs, encoding="utf-8")
         # Convert block_timestamp to datetime
         record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
+        record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
         return record_df
 
     def pipeline(self, date):
