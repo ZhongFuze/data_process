@@ -886,9 +886,8 @@ class Worker():
     def __init__(self):
         pass
     def save_to_storage(self, data, cursor):
-        # id,name,label,namenode,is_wrappered,token_id,parent_node,fuses,registration_time,expired_time,resolver,owner,resolved_address,reverse_address,key_value,update_time
+        # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expired_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
         # also need to change record for this table
-        # 
         pass
 
     def transaction_process(self, records):
