@@ -171,6 +171,7 @@ COIN_TYPE_ETH = "60"
 
 def NameRegisteredIdOwner(decoded_str):
     '''
+    # Old
     description: NameRegistered (uint256 id, address owner, uint256 expires)
     example: [
         "110393110730227186427564016478130897043370416314581215101495899015199138768485",
@@ -180,15 +181,16 @@ def NameRegisteredIdOwner(decoded_str):
     param: uint256 id
     param: address owner
     param: uint256 expires
-    return node, token_id, label, owner, expire_time
+    return node, label, erc721_token_id, erc1155_token_id, owner, expire_time
     '''
     decoded_data = json.loads(decoded_str)
-    token_id = decoded_data[0]
-    label = uint256_to_bytes32(token_id)
+    erc721_token_id = decoded_data[0]
+    label = uint256_to_bytes32(erc721_token_id)
     owner = decoded_data[1]
     expire_time = decoded_data[2]
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, owner, expire_time
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, label, erc721_token_id, erc1155_token_id, owner, expire_time
 
 
 def NameRegisteredNameLabelOwner(decoded_str):
@@ -206,17 +208,18 @@ def NameRegisteredNameLabelOwner(decoded_str):
     param: address owner
     param: uint256 cost
     param: uint256 expires
-    return node, token_id, label, ens_name, owner, expire_time
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time
     '''
     decoded_data = json.loads(decoded_str)
     name = decoded_data[0]
-    ens_name = format("{}.eth", name)
+    ens_name = "{}.eth".format(name)
     label = decoded_data[1]
-    token_id = bytes32_to_uint256(label)
+    erc721_token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[4]
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, ens_name, owner, expire_time
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time
 
 
 def NameRegisteredWithCostPremium(decoded_str):
@@ -236,17 +239,19 @@ def NameRegisteredWithCostPremium(decoded_str):
     param: uint256 baseCost
     param: uint256 premium
     param: uint256 expires
-    return node, token_id, label, ens_name, owner, expire_time
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time
     '''
     decoded_data = json.loads(decoded_str)
     name = decoded_data[0]
-    ens_name = format("{}.eth", name)
+    ens_name = "{}.eth".format(name)
     label = decoded_data[1]
-    token_id = bytes32_to_uint256(label)
     owner = decoded_data[2]
     expire_time = decoded_data[5]
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, ens_name, owner, expire_time
+
+    erc721_token_id = bytes32_to_uint256(label)
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time
 
 
 def SetName(decoded_str):
@@ -255,27 +260,39 @@ def SetName(decoded_str):
     example: ["0xc157bb70a20d5d24cdacee450f12e77fa4ff01a1", "yousssef.eth"]
     param: bytes32 address
     param: string name
-    return address, ens_name
+    return reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node
     '''
     decoded_data = json.loads(decoded_str)
-    address = decoded_data[0]
+    reverse_address = decoded_data[0]
     ens_name = decoded_data[1]
-    return address, ens_name
+
+    reverse_label, reverse_node = compute_label_and_node(reverse_address)
+    reverse_name = "[{}].addr.reverse".format(str(reverse_label).replace("0x", ""))
+    reverse_token_id = bytes32_to_uint256(reverse_node)
+
+    # Refer to nowrap for processing
+    parent_node, label, erc721_token_id, erc1155_token_id, node = compute_namehash(ens_name)
+    return reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node
 
 
 def ReverseClaimed(decoded_str):
     '''
+    after 2023-04-07 11:12:23
     description: ReverseClaimed (address addr, bytes32 node)
     example: ["0x8951c020a0684d061fe939a0f3dcbf076e87f083","0x7bfc00ce54fff4c2fffccfe1990cc5b6b732fe12c25059661c0e3bb19067b758"]
     tips: node is [address].addr.reverse nodehash
     param: bytes32 address
     param: bytes32 node
-    return reverse_node, address
+    return reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address
     '''
     decoded_data = json.loads(decoded_str)
-    address = decoded_data[0]
+    reverse_address = decoded_data[0]
     reverse_node = decoded_data[1]
-    return reverse_node, address
+
+    reverse_label, reverse_node = compute_label_and_node(reverse_address)
+    reverse_name = "[{}].addr.reverse".format(str(reverse_label).replace("0x", ""))
+    reverse_token_id = bytes32_to_uint256(reverse_node)
+    return reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address
 
 
 def NameChanged(decoded_str):
@@ -285,12 +302,15 @@ def NameChanged(decoded_str):
     tips: node is [address].addr.reverse nodehash
     param: bytes32 node
     param: string name
-    return reverse_node, ens_name
+    return reverse_node, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node
     '''
     decoded_data = json.loads(decoded_str)
     reverse_node = decoded_data[0]
     ens_name = decoded_data[1]
-    return reverse_node, ens_name
+
+    # Refer to wrapped for processing
+    parent_node, label, erc721_token_id, erc1155_token_id, node = compute_namehash(ens_name)
+    return reverse_node, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node
 
 
 def NameRenewedID(decoded_str):
@@ -299,14 +319,15 @@ def NameRenewedID(decoded_str):
     example: ["472682841505974921215082356139689583184615166363725744496715522782797959178","1743027215"]
     param: uint256 id
     param: uint256 expires
-    return node, token_id, label, expire_time
+    return node, label, erc721_token_id, erc1155_token_id, expire_time
     '''
     decoded_data = json.loads(decoded_str)
-    token_id = decoded_data[0]
-    label = uint256_to_bytes32(token_id)
+    erc721_token_id = decoded_data[0]
+    label = uint256_to_bytes32(erc721_token_id)
     expire_time = decoded_data[1]
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, expire_time
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, label, erc721_token_id, erc1155_token_id, expire_time
 
 
 def NameRenewedName(decoded_str):
@@ -322,16 +343,18 @@ def NameRenewedName(decoded_str):
     param: bytes32 label
     param: uint256 cost
     param: uint256 expires
-    return node, token_id, label, ens_name, expire_time
+    return node, label, erc721_token_id, erc1155_token_id, ens_name, expire_time
     '''
     decoded_data = json.loads(decoded_str)
     name = decoded_data[0]
-    ens_name = format("{}.eth", name)
+    ens_name = "{}.eth".format(name)
     label = decoded_data[1]
-    token_id = bytes32_to_uint256(label)
     expire_time = decoded_data[3]
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, ens_name, expire_time
+
+    erc721_token_id = bytes32_to_uint256(label)
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, label, erc721_token_id, erc1155_token_id, ens_name, expire_time
 
 
 def TextChanged(decoded_str):
@@ -409,24 +432,26 @@ def NewOwner(decoded_str):
             "0x67bab723183c76596e9425bcecd2da6995a53bea4d0df8a825c63b719dfbe856",
             "0x7c043bcb3478e00781f33aff4cb97d9f7cf5c56f"
         ]
-    param: bytes32 node
+    param: bytes32 node (parent_node or base_node)
     param: bytes32 label
     param: address owner
-    return reverse, parent_node, node, token_id, label, owner
+    return reverse, parent_node, node, label, erc721_token_id, erc1155_token_id, owner
     '''
     decoded_data = json.loads(decoded_str)
     reverse = False
-    p_node = decoded_data[0]
-    if p_node == ADDR_REVERSE_NODE:
+    parent_node = decoded_data[0]
+    if parent_node == ADDR_REVERSE_NODE:
         reverse = True
 
     label = decoded_data[1]
-    token_id = bytes32_to_uint256(label)
-    node = bytes32_to_nodehash(p_node, label)
     owner = decoded_data[2]
 
+    node = bytes32_to_nodehash(parent_node, label)
+    erc721_token_id = bytes32_to_uint256(label)
+    erc1155_token_id = bytes32_to_uint256(node)
+
     # if reverse is True, node is reverse_node
-    return reverse, p_node, node, token_id, label, owner
+    return reverse, parent_node, node, label, erc721_token_id, erc1155_token_id, owner
 
 
 def AddressChanged(decoded_str):
@@ -478,22 +503,24 @@ def TransferBatch(decoded_str):
     param: bytes to
     param: uint256[] ids
     param: uint256[] values
-    return list of [node, token_id, label, new_owner]
+    return list of [node, erc1155_token_id, new_owner]
     '''
     return_data = []
     decoded_data = json.loads(decoded_str)
     to_address = decoded_data[2]
     ids = decoded_data[3]
-    for token_id in ids:
-        label = uint256_to_bytes32(token_id)
-        node = bytes32_to_nodehash(ETH_NODE, label)
-        return_data.append([node, token_id, label, to_address])
+    for _erc1155_token_id in ids:
+        # New calculate: bytes(uint256 token_id) = uint256(bytes namenode)
+        # label calculated by ens_name(can not transfer from token_id)
+        new_node = uint256_to_bytes32(_erc1155_token_id)
+        return_data.append([new_node, _erc1155_token_id, to_address])
 
     return return_data
 
 
 def TransferSingle(decoded_str):
     '''
+    # ENS: Name Wrapper
     description: TransferSingle (address operator, address from, address to, uint256 id, uint256 value)
     example:
         [
@@ -508,14 +535,15 @@ def TransferSingle(decoded_str):
     param: bytes to
     param: uint256 id
     param: uint256 value
-    return node, token_id, label, new_owner
+    return node, erc1155_token_id, to_address
     '''
     decoded_data = json.loads(decoded_str)
     to_address = decoded_data[2]
-    token_id = decoded_data[3]
-    label = uint256_to_bytes32(token_id)
-    node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, to_address
+    erc1155_token_id = decoded_data[3]
+    # New calculate: bytes(uint256 token_id) = uint256(bytes namenode)
+    # label calculated by ens_name(can not transfer from token_id)
+    node = uint256_to_bytes32(erc1155_token_id)
+    return node, erc1155_token_id, to_address
 
 
 def TransferTo(decoded_str):
@@ -547,18 +575,22 @@ def TransferFromTo(decoded_str):
         ]
     param: bytes32 node
     param: bytes owner
-    return node, token_id, label, new_owner
+    return node, label, erc721_token_id, erc1155_token_id, to_address
     '''
     decoded_data = json.loads(decoded_str)
     to_address = decoded_data[1]
-    token_id = decoded_data[2]
-    label = uint256_to_bytes32(token_id)
+    erc721_token_id = decoded_data[2]
+    # Old calculate: bytes(uint256 token_id) = uint256(bytes label)
+    # Old calculate: namenode = bytes32_to_nodehash(label)
+    label = uint256_to_bytes32(erc721_token_id)
     node = bytes32_to_nodehash(ETH_NODE, label)
-    return node, token_id, label, to_address
+    erc1155_token_id = bytes32_to_uint256(node)
+    return node, label, erc721_token_id, erc1155_token_id, to_address
 
 
 def NameWrapped(decoded_str):
     '''
+    # ENS: Name Wrapper
     description: NameWrapped (bytes32 node, bytes name, address owner, uint32 fuses, uint64 expiry)
     example:
         [
@@ -573,7 +605,7 @@ def NameWrapped(decoded_str):
     param: bytes owner
     param: uint32 fuses
     param: uint64 expiry
-    return is_wrapped, node, ens_name, owner, fuses, expire_time
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node, is_wrapped, fuses, grace_period_ends, owner
     '''
     decoded_data = json.loads(decoded_str)
     is_wrapped = True
@@ -582,8 +614,10 @@ def NameWrapped(decoded_str):
     ens_name = decode_dns_style_name(bytes_name)
     owner = decoded_data[2]
     fuses = decoded_data[3]
-    expire_time = decoded_data[4]
-    return is_wrapped, node, ens_name, owner, fuses, expire_time
+    grace_period_ends = decoded_data[4]
+
+    parent_node, label, erc721_token_id, erc1155_token_id, node = compute_namehash(ens_name)
+    return node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node, is_wrapped, fuses, grace_period_ends, owner
 
 
 def NameUnwrapped(decoded_str):
@@ -596,20 +630,14 @@ def NameUnwrapped(decoded_str):
         ]
     param: bytes32 node
     param: bytes owner
-    return node, owner
+    return node, is_wrapped, owner
     '''
     is_wrapped = False
     decoded_data = json.loads(decoded_str)
     node = decoded_data[0]
     owner = decoded_data[1]
-    return is_wrapped, node, owner
+    return node, is_wrapped, owner
 
-
-# Set Child Fuses
-# FusesSet (bytes32 node, uint32 fuses)
-FUSES_SET = "0x39873f00c80f4f94b7bd1594aebcf650f003545b74824d57ddf4939e3ff3a34b"
-# ExpiryExtended (bytes32 node, uint64 expiry)
-EXPIRY_EXTENDED = "0xf675815a0817338f93a7da433f6bd5f5542f1029b11b455191ac96c7f6a9b132"
 
 def FusesSet(decoded_str):
     '''
@@ -636,12 +664,12 @@ def ExpiryExtended(decoded_str):
         ["0xd5a7ec68a3cd72615ab8d2db3fc642e2a02c1d9baf5d57087d91f5a441a402b9","1778009722"]
     param: bytes32 node
     param: uint64 expiry
-    return node, expire_time
+    return node, grace_period_ends
     '''
     decoded_data = json.loads(decoded_str)
     node = decoded_data[0]
-    expire_time = decoded_data[1]
-    return node, expire_time
+    grace_period_ends = decoded_data[1]
+    return node, grace_period_ends
 
 
 # Set DNS Records
