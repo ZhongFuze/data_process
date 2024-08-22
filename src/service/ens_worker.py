@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-19 22:05:30
+LastEditTime: 2024-08-23 02:33:46
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -13,6 +13,7 @@ sys.path.append("/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src")
 
 import os
 import ssl
+import copy
 import math
 import time
 import uuid
@@ -26,6 +27,7 @@ import traceback
 import subprocess
 import pandas as pd
 
+from pprint import pprint
 from datetime import datetime, timedelta
 from psycopg2.extras import execute_values, execute_batch
 from eth_utils import encode_hex, keccak, to_bytes
@@ -162,6 +164,7 @@ ignore_method = {
     DNS_ZONE_CLEARED: "DnsZoneCleared"
 }
 
+NAME_WRAPPED_CONTRACT_ADDRESS = "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401"
 # namehash('eth') = 0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae
 ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 # namehash('addr.reverse')
@@ -891,16 +894,23 @@ class Worker():
         pass
 
     def transaction_process(self, records):
-        upsert_data = {
-
-        }
+        '''
+        description: Single transaction_hash processing
+        '''
+        upsert_record = []
+        upsert_data = {}
+        is_ignore = False
         for _, row in records.iterrows():
-            block_timestamp = row["block_timestamp"]
+            block_datetime = row["block_timestamp"]
+            block_unix = row["block_unix"]
             transaction_hash = row["transaction_hash"]
             method_id = row["method_id"]
+            signature = row["signature"]
+            decoded_str = row["decoded"]
             if method_id in ignore_method:
                 # TODO: if ignore_method in transaction_hash, save or debug
-                print(f"transaction_hash {transaction_hash} ignore method {method_id}")
+                print(f"Ignore this transaction block_datetime {block_datetime} transaction_hash {transaction_hash} ignore method {signature}")
+                is_ignore = True
                 break
 
             upsert_record.append({
