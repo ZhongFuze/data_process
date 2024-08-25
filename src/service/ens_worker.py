@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-25 22:05:13
+LastEditTime: 2024-08-26 00:19:54
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -935,17 +935,13 @@ class Worker():
                     if key in ["resolved_records", "key_value"]:
                         kv_fields = []
                         for k, v in record[key].items():
-                            kv_fields.append(k)
-                            kv_fields.append(v)
-                        jsonb_data = ",".join("'" + x + "'" for x in kv_fields)
-                        jsonb_update.append(f"{key} = {key} || jsonb_build_object({jsonb_data})")
-                        # jsonb_data = ','.join([k, v])
+                            vv = quote(v, 'utf-8')  # convert string to url-encoded
+                            kv_fields.append("'" + k + "'")
+                            kv_fields.append("'" + vv + "'")
+                        jsonb_data = ",".join(kv_fields)
+
                         # Handle JSONB fields using jsonb_build_object
-                        # jsonb_data = ','.join([f"'{k}', %s" for k in record[key].keys()])
-                        # print(jsonb_data)
-                        # insert_values.extend(record[key].values())
-                        # update_fields.append(f"{field} = jsonb_build_object({jsonb_data})")
-                        # print(key, field)
+                        jsonb_update.append(f"{key} = {key} || jsonb_build_object({jsonb_data})")
                     else:
                         insert_fields.append(field)
                         insert_values.append(record[key])
@@ -978,9 +974,42 @@ class Worker():
                     raise Exception("Caught exception during update jsonb in {}, sql={}".format(error_msg, update_jsonb_sql))
 
     def save_ens_update_record_to_storage(self, data, cursor):
-        # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expire_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
+        # id,block_timestamp,namenode,transaction_hash,log_count,is_registered,is_old_registered,is_new_registered,update_record
         # also need to change record for this table
-        pass
+        sql_statement = """INSERT INTO public.ens_record (
+            block_timestamp,
+            namenode,
+            transaction_hash,
+            log_count,
+            is_registered,
+            is_old_registered,
+            is_new_registered,
+            update_record
+        ) VALUES %s
+        ON CONFLICT (namenode, transaction_hash, log_count)
+        DO UPDATE SET
+            is_registered = EXCLUDED.is_registered,
+            is_old_registered = EXCLUDED.is_old_registered,
+            is_new_registered = EXCLUDED.is_new_registered,
+            update_record = EXCLUDED.update_record;
+        """
+        upsert_items = []
+        for namenode, record in data.items():
+            update_record = json.dumps(record["update_record"])
+            is_registered = record.get("is_registered", False)
+            is_old_registered = record.get("is_old_registered", False)
+            is_new_registered = record.get("is_new_registered", False)
+            upsert_items.append(
+                (record["block_timestamp"], namenode, record["transaction_hash"], record["log_count"], is_registered, is_old_registered, is_new_registered, update_record)
+            )
+
+        if upsert_items:
+            try:
+                execute_values(cursor, sql_statement, upsert_items)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during insert records in {}, sql={}, values={}".format(
+                    error_msg, sql_statement, json.dumps(upsert_items)))
 
     def transaction_process(self, records):
         '''
@@ -990,8 +1019,14 @@ class Worker():
         upsert_data = {}
         is_ignore = False
         is_registered = False
+        is_old_registered = False
+        is_new_registered = False
         reverse_claim = False
+        log_count = 0
+        transaction_hash = ""
+        block_unix = 0
         for _, row in records.iterrows():
+            log_count += 1
             block_datetime = row["block_timestamp"]
             block_unix = row["block_unix"]
             transaction_hash = row["transaction_hash"]
@@ -1009,6 +1044,7 @@ class Worker():
                 break
 
             if method_id == NAME_REGISTERED_ID_OWNER_EXPIRES:
+                is_registered = True
                 node, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredIdOwner(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
@@ -1020,7 +1056,6 @@ class Worker():
                 upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
                 upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
 
-                is_registered = True
                 if node not in upsert_record:
                     upsert_record[node] = {
                         "block_timestamp": unix_string_to_datetime(block_unix),
@@ -1032,6 +1067,7 @@ class Worker():
                     "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == NAME_REGISTERED_NAME_LABEL_OWNER_EXPIRES:
+                is_old_registered = True
                 node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredNameLabelOwner(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
@@ -1044,7 +1080,6 @@ class Worker():
                 upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
                 upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
 
-                is_registered = True
                 if node not in upsert_record:
                     upsert_record[node] = {
                         "block_timestamp": unix_string_to_datetime(block_unix),
@@ -1056,6 +1091,7 @@ class Worker():
                     "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == NAME_REGISTERED_NEW:
+                is_new_registered = True
                 node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredWithCostPremium(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
@@ -1068,7 +1104,6 @@ class Worker():
                 upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
                 upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
 
-                is_registered = True
                 if node not in upsert_record:
                     upsert_record[node] = {
                         "block_timestamp": unix_string_to_datetime(block_unix),
@@ -1540,7 +1575,14 @@ class Worker():
 
         for node in upsert_data:
             upsert_data[node]["update_time"] = unix_string_to_datetime(block_unix)
-            if is_registered:
+            upsert_record[node]["log_count"] = log_count
+            if is_registered or is_old_registered or is_new_registered:
+                upsert_record[node]["is_registered"] = is_registered
+                upsert_record[node]["is_old_registered"] = is_old_registered
+                upsert_record[node]["is_new_registered"] = is_new_registered
+                # new_registered log_count < 13 Incomplete part
+                # old_registered log_count < 9 Incomplete part
+
                 if "resolver" in upsert_data[node]:
                     if "owner" in upsert_data[node]:
                         owner = upsert_data[node]["owner"]
@@ -1565,7 +1607,7 @@ class Worker():
                             upsert_data[node]["reverse_address"] = owner
 
         if is_ignore is True:
-            return {}, []
+            return {}, {}
         return upsert_data, upsert_record
 
     def daily_read_storage(self, date, cursor):
@@ -1592,7 +1634,8 @@ class Worker():
         record_df = record_df.sort_values(by='block_timestamp')
         # Group by transaction_hash
         grouped = record_df.groupby('transaction_hash', sort=False)
-
+        print(len(grouped))
+        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
         for transaction_hash, group in grouped:
             # Sort transaction_index and log_index
             # if transaction_hash == "0x18a548144371310fd0489677f3fe3ab5313fdb9eca83292c570e65b97e54f17c":
@@ -1608,6 +1651,7 @@ class Worker():
             try:
                 upsert_data, upsert_record = self.transaction_process(sorted_group)
                 self.save_ens_decoded_to_storage(upsert_data, cursor)
+                self.save_ens_update_record_to_storage(upsert_record, cursor)
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 with open(failed_path, 'a+', encoding='utf-8') as fail:
