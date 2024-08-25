@@ -923,6 +923,7 @@ class Worker():
                 "resolver": "resolver",
                 "resolved_address": "resolved_address",
                 "reverse_address": "reverse_address",
+                "contenthash": "contenthash",
                 "update_time": "update_time",
                 "resolved_records": "resolved_records",  # JSONB
                 "key_value": "key_value"  # JSONB
