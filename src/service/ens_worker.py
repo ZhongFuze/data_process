@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-23 02:33:46
+LastEditTime: 2024-08-25 22:05:13
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -170,6 +170,11 @@ ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 # namehash('addr.reverse')
 ADDR_REVERSE_NODE = "0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2"
 COIN_TYPE_ETH = "60"
+ETH_UPDATE_TIMESTAMP = 1678204800  # 2023-03-28
+
+EMPTY_ADDRESS = "0x0000000000000000000000000000000000000000"
+OLD_PUBLIC_RESOLVER = "0x4976fb03c32e5b8cfe2b6ccb31c09ba78ebaba41" # ENS: Public Resolver 2 (Old)
+NEW_PUBLIC_RESOLVER = "0x231b0ee14048e9dccd1d247744d114a4eb5e8e63" # ENS: Public Resolver
 
 
 def NameRegisteredIdOwner(decoded_str):
@@ -888,8 +893,91 @@ class Worker():
     '''
     def __init__(self):
         pass
-    def save_to_storage(self, data, cursor):
-        # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expired_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
+    # def save_ens_decoded_to_storage(self, data, cursor):
+    #     # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expire_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
+
+    def save_ens_decoded_to_storage(self, data, cursor):
+        """
+        Function to insert or update ENS decoded data in the `ens_name` table.
+        If the record already exists (conflict on `namenode`), it will update only the fields present in `data`.
+        :param data: A dictionary where the key is the `namenode`, and value is the data.
+        :param cursor: The database cursor to execute SQL queries.
+        """
+        for namenode, record in data.items():
+            insert_fields = ['namenode']  # Always insert `namenode`
+            insert_values = [namenode]  # Value for `namenode`
+            update_fields = []  # Fields to update in case of conflict
+
+            field_mapping = {
+                "name": "name",
+                "label": "label",
+                "erc721_token_id": "erc721_token_id",
+                "erc1155_token_id": "erc1155_token_id",
+                "parent_node": "parent_node",
+                "registration_time": "registration_time",
+                "expire_time": "expire_time",
+                "is_wrapped": "is_wrapped",
+                "fuses": "fuses",
+                "grace_period_ends": "grace_period_ends",
+                "owner": "owner",
+                "resolver": "resolver",
+                "resolved_address": "resolved_address",
+                "reverse_address": "reverse_address",
+                "update_time": "update_time",
+                "resolved_records": "resolved_records",  # JSONB
+                "key_value": "key_value"  # JSONB
+            }
+
+            jsonb_update = []
+            for key, field in field_mapping.items():
+                if key in record:
+                    if key in ["resolved_records", "key_value"]:
+                        kv_fields = []
+                        for k, v in record[key].items():
+                            kv_fields.append(k)
+                            kv_fields.append(v)
+                        jsonb_data = ",".join("'" + x + "'" for x in kv_fields)
+                        jsonb_update.append(f"{key} = {key} || jsonb_build_object({jsonb_data})")
+                        # jsonb_data = ','.join([k, v])
+                        # Handle JSONB fields using jsonb_build_object
+                        # jsonb_data = ','.join([f"'{k}', %s" for k in record[key].keys()])
+                        # print(jsonb_data)
+                        # insert_values.extend(record[key].values())
+                        # update_fields.append(f"{field} = jsonb_build_object({jsonb_data})")
+                        # print(key, field)
+                    else:
+                        insert_fields.append(field)
+                        insert_values.append(record[key])
+                        update_fields.append(f"{field} = EXCLUDED.{field}")
+
+            # Build the `INSERT ON CONFLICT` query
+            insert_fields_sql = ', '.join(insert_fields)
+            insert_placeholders_sql = ', '.join(['%s'] * len(insert_values))
+            update_fields_sql = ', '.join(update_fields)
+            sql = f"""
+                INSERT INTO ens_name ({insert_fields_sql})
+                VALUES ({insert_placeholders_sql})
+                ON CONFLICT (namenode)
+                DO UPDATE SET {update_fields_sql}
+            """
+            try:
+                cursor.execute(sql, insert_values)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during insert in {}, sql={}, values={}".format(error_msg, sql, json.dumps(insert_values)))
+            if jsonb_update:
+                set_jsonb = ",".join(jsonb_update)
+                update_jsonb_sql = f"""
+                    UPDATE ens_name SET {set_jsonb} WHERE namenode = '{namenode}'
+                """
+                try:
+                    cursor.execute(update_jsonb_sql)
+                except Exception as ex:
+                    error_msg = traceback.format_exc()
+                    raise Exception("Caught exception during update jsonb in {}, sql={}".format(error_msg, update_jsonb_sql))
+
+    def save_ens_update_record_to_storage(self, data, cursor):
+        # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expire_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
         # also need to change record for this table
         pass
 
@@ -897,30 +985,28 @@ class Worker():
         '''
         description: Single transaction_hash processing
         '''
-        upsert_record = []
+        upsert_record = {}
         upsert_data = {}
         is_ignore = False
+        is_registered = False
+        reverse_claim = False
         for _, row in records.iterrows():
             block_datetime = row["block_timestamp"]
             block_unix = row["block_unix"]
             transaction_hash = row["transaction_hash"]
+            log_index = row["log_index"]
             method_id = row["method_id"]
+            contract_address = row["contract_address"]
+            contract_label = row["contract_label"]
             signature = row["signature"]
             decoded_str = row["decoded"]
+
             if method_id in ignore_method:
                 # TODO: if ignore_method in transaction_hash, save or debug
                 print(f"Ignore this transaction block_datetime {block_datetime} transaction_hash {transaction_hash} ignore method {signature}")
                 is_ignore = True
                 break
 
-            upsert_record.append({
-                "block_datetime": block_datetime,
-                "transaction_hash": transaction_hash,
-                "log_index": row["log_index"],
-                "contract_address": row["contract_address"],
-                "contract_label": row["contract_label"],
-                "symbol": signature
-            })
             if method_id == NAME_REGISTERED_ID_OWNER_EXPIRES:
                 node, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredIdOwner(decoded_str)
                 if node not in upsert_data:
@@ -930,8 +1016,20 @@ class Worker():
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                 upsert_data[node]["owner"] = owner
-                upsert_data[node]["expire_time"] = int(expire_time)
-                upsert_data[node]["registration_time"] = block_unix
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                is_registered = True
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NAME_REGISTERED_NAME_LABEL_OWNER_EXPIRES:
                 node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredNameLabelOwner(decoded_str)
                 if node not in upsert_data:
@@ -942,8 +1040,20 @@ class Worker():
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                 upsert_data[node]["owner"] = owner
-                upsert_data[node]["expire_time"] = int(expire_time)
-                upsert_data[node]["registration_time"] = block_unix
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                is_registered = True
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NAME_REGISTERED_NEW:
                 node, ens_name, label, erc721_token_id, erc1155_token_id, owner, expire_time = NameRegisteredWithCostPremium(decoded_str)
                 if node not in upsert_data:
@@ -954,9 +1064,22 @@ class Worker():
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                 upsert_data[node]["owner"] = owner
-                upsert_data[node]["expire_time"] = int(expire_time)
-                upsert_data[node]["registration_time"] = block_unix
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                is_registered = True
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == SET_NAME:
+                reverse_claim = True
                 reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node = SetName(decoded_str)
                 if reverse_node not in upsert_data:
                     upsert_data[reverse_node] = {"namenode": reverse_node}
@@ -967,8 +1090,8 @@ class Worker():
                 upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
                 upsert_data[reverse_node]["owner"] = reverse_address
                 upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
-                upsert_data[reverse_node]["expire_time"] = 0
-                upsert_data[reverse_node]["registration_time"] = block_unix
+                upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
+                upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                 upsert_data[reverse_node]["reverse_address"] = reverse_address
 
                 if node not in upsert_data:
@@ -981,7 +1104,28 @@ class Worker():
                 upsert_data[node]["parent_node"] = parent_node
                 upsert_data[node]["reverse_address"] = reverse_address
 
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+                if reverse_node not in upsert_record:
+                    upsert_record[reverse_node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": reverse_node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[reverse_node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
+
             elif method_id == REVERSE_CLAIMED:
+                reverse_claim = True
                 reverse_node, reverse_name, reverse_label, reverse_token_id, reverse_address = ReverseClaimed(decoded_str)
                 if reverse_node not in upsert_data:
                     upsert_data[reverse_node] = {"namenode": reverse_node}
@@ -992,10 +1136,22 @@ class Worker():
                 upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
                 upsert_data[reverse_node]["owner"] = reverse_address
                 upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
-                upsert_data[reverse_node]["expire_time"] = 0
-                upsert_data[reverse_node]["registration_time"] = block_unix
+                upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
+                upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                 upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                if reverse_node not in upsert_record:
+                    upsert_record[reverse_node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": reverse_node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[reverse_node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
+
             elif method_id == NAME_CHANGED:
+                reverse_claim = True
                 reverse_node, node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node = NameChanged(decoded_str)
                 if reverse_node in upsert_data:
                     # ReverseClaimed & NameChanged will appear together
@@ -1010,12 +1166,32 @@ class Worker():
                     upsert_data[node]["parent_node"] = parent_node
                     upsert_data[node]["reverse_address"] = reverse_address
 
+                    if node not in upsert_record:
+                        upsert_record[node] = {
+                            "block_timestamp": unix_string_to_datetime(block_unix),
+                            "namenode": node,
+                            "transaction_hash": transaction_hash,
+                            "update_record": {}
+                        }
+                    upsert_record[node]["update_record"][log_index] = {
+                        "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NAME_RENEWED_UINT:
                 node, label, erc721_token_id, erc1155_token_id, expire_time = NameRenewedID(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
-                upsert_data[node]["expire_time"] = int(expire_time)
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == NAME_RENEWED_STRING:
                 node, label, erc721_token_id, erc1155_token_id, ens_name, expire_time = NameRenewedName(decoded_str)
@@ -1026,7 +1202,17 @@ class Worker():
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
-                upsert_data[node]["expire_time"] = int(expire_time)
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(expire_time)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == TEXT_CHANGED_KEY:
                 node, texts_key = TextChanged(decoded_str)
@@ -1036,6 +1222,17 @@ class Worker():
                     if "key_value" not in upsert_data[node]:
                         upsert_data[node]["key_value"] = {}
                     upsert_data[node]["key_value"][texts_key] = ""
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == TEXT_CHANGED_KEY_VALUE:
                 node, texts_key, texts_val = TextChanged_KeyValue(decoded_str)
                 if node not in upsert_data:
@@ -1044,6 +1241,17 @@ class Worker():
                     if "key_value" not in upsert_data[node]:
                         upsert_data[node]["key_value"] = {}
                     upsert_data[node]["key_value"][texts_key] = texts_val
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == CONTENTHASH_CHANGED:
                 node, contenthash = ContenthashChanged(decoded_str)
                 if node not in upsert_data:
@@ -1051,12 +1259,33 @@ class Worker():
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["contenthash"] = contenthash
 
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NEW_RESOLVER:
                 node, resolver = NewResolver(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["resolver"] = resolver
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NEW_OWNER:
                 is_reverse, parent_node, node, label, erc721_token_id, erc1155_token_id, owner = NewOwner(decoded_str)
                 if node not in upsert_data:
@@ -1067,6 +1296,17 @@ class Worker():
                 upsert_data[node]["parent_node"] = parent_node
                 upsert_data[node]["label"] = label
                 upsert_data[node]["owner"] = owner
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
                 if is_reverse is True:
                     # update reverse_address in `NewOwner`
                     reverse_address = owner
@@ -1083,9 +1323,20 @@ class Worker():
                     upsert_data[reverse_node]["erc1155_token_id"] = reverse_token_id
                     upsert_data[reverse_node]["owner"] = reverse_address
                     upsert_data[reverse_node]["parent_node"] = ADDR_REVERSE_NODE
-                    upsert_data[reverse_node]["expire_time"] = 0
-                    upsert_data[reverse_node]["registration_time"] = block_unix
+                    upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
+                    upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                     upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                    if reverse_node not in upsert_record:
+                        upsert_record[reverse_node] = {
+                            "block_timestamp": unix_string_to_datetime(block_unix),
+                            "namenode": reverse_node,
+                            "transaction_hash": transaction_hash,
+                            "update_record": {}
+                        }
+                    upsert_record[reverse_node]["update_record"][log_index] = {
+                        "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
+
 
             elif method_id == ADDR_CHANGED:
                 node, new_address = AddrChanged(decoded_str)
@@ -1094,6 +1345,17 @@ class Worker():
                 upsert_data[node]["namenode"] = node
                 # upsert_data[node]["coin_type"] = COIN_TYPE_ETH
                 upsert_data[node]["resolved_address"] = new_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == ADDRESS_CHANGED:
                 node, coin_type, new_address = AddressChanged(decoded_str)
                 if node not in upsert_data:
@@ -1104,6 +1366,18 @@ class Worker():
                 if "resolved_records" not in upsert_data[node]:
                     upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
                 upsert_data[node]["resolved_records"][str(coin_type)] = new_address
+                if coin_type == COIN_TYPE_ETH:
+                    upsert_data[node]["resolved_address"] = new_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == TRANSFER_BATCH:
                 # list of [node, erc1155_token_id, new_owner]
@@ -1117,6 +1391,17 @@ class Worker():
                     upsert_data[transfer_node]["namenode"] = transfer_node
                     upsert_data[transfer_node]["erc1155_token_id"] = transfer_token_id
                     upsert_data[transfer_node]["owner"] = transfer_owner
+
+                    if transfer_node not in upsert_record:
+                        upsert_record[transfer_node] = {
+                            "block_timestamp": unix_string_to_datetime(block_unix),
+                            "namenode": transfer_node,
+                            "transaction_hash": transaction_hash,
+                            "update_record": {}
+                        }
+                    upsert_record[transfer_node]["update_record"][log_index] = {
+                        "signature": signature, "upsert_data": copy.deepcopy(upsert_data[transfer_node])}
+
             elif method_id == TRANSFER_SINGLE:
                 node, erc1155_token_id, to_address = TransferSingle(decoded_str)
                 if node not in upsert_data:
@@ -1124,12 +1409,34 @@ class Worker():
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                 upsert_data[node]["owner"] = to_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == TRANSFER_TO:
                 node, owner = TransferTo(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["owner"] = owner
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == TRANSFER_FROM_TO:
                 node, label, erc721_token_id, erc1155_token_id, to_address = TransferFromTo(decoded_str)
                 if node not in upsert_data:
@@ -1139,6 +1446,16 @@ class Worker():
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                 upsert_data[node]["owner"] = to_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             elif method_id == NAME_WRAPPED:
                 node, ens_name, label, erc721_token_id, erc1155_token_id, parent_node, is_wrapped, fuses, grace_period_ends, owner = NameWrapped(decoded_str)
@@ -1152,8 +1469,19 @@ class Worker():
                 upsert_data[node]["parent_node"] = parent_node
                 upsert_data[node]["is_wrapped"] = is_wrapped
                 upsert_data[node]["fuses"] = int(fuses)
-                upsert_data[node]["grace_period_ends"] = int(grace_period_ends)
+                upsert_data[node]["grace_period_ends"] = unix_string_to_datetime(grace_period_ends)
                 upsert_data[node]["owner"] = owner
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == NAME_UNWRAPPED:
                 node, is_wrapped, owner = NameUnwrapped(decoded_str)
                 if node not in upsert_data:
@@ -1161,27 +1489,84 @@ class Worker():
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["is_wrapped"] = is_wrapped
                 upsert_data[node]["owner"] = owner
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == FUSES_SET:
                 node, fuses = FusesSet(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["fuses"] = int(fuses)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
             elif method_id == EXPIRY_EXTENDED:
                 node, grace_period_ends = ExpiryExtended(decoded_str)
                 node, fuses = FusesSet(decoded_str)
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
-                upsert_data[node]["grace_period_ends"] = int(grace_period_ends)
+                upsert_data[node]["grace_period_ends"] = unix_string_to_datetime(grace_period_ends)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
             # print(row["block_timestamp"], row["log_index"], row["contract_label"], row["signature"])
 
-        upsert_data["update_time"] = block_unix
-        if is_ignore is False:
-            pprint(upsert_data)
-        else:
-            print("Ignored....\n")
+        for node in upsert_data:
+            upsert_data[node]["update_time"] = unix_string_to_datetime(block_unix)
+            if is_registered:
+                if "resolver" in upsert_data[node]:
+                    if "owner" in upsert_data[node]:
+                        owner = upsert_data[node]["owner"]
+                        if "resolved_address" not in upsert_data[node]:
+                            upsert_data[node]["resolved_address"] = owner
+                        if "resolved_records" not in upsert_data[node]:
+                            upsert_data[node]["resolved_records"] = {COIN_TYPE_ETH: owner}
+
+                if "resolver" not in upsert_data[node]:
+                    if "resolved_address" in upsert_data[node]:
+                        resolved_address = upsert_data[node]["resolved_address"]
+                        if resolved_address != "" or resolved_address != "0x" or resolved_address != EMPTY_ADDRESS:
+                            if int(block_unix) >= ETH_UPDATE_TIMESTAMP:
+                                upsert_data[node]["resolver"] = NEW_PUBLIC_RESOLVER
+                            else:
+                                upsert_data[node]["resolver"] = OLD_PUBLIC_RESOLVER
+                # register and reverse_claim in save tx
+                if reverse_claim:
+                    if "reverse_address" not in upsert_data[node]:
+                        if "owner" in upsert_data[node]:
+                            owner = upsert_data[node]["owner"]
+                            upsert_data[node]["reverse_address"] = owner
+
+        if is_ignore is True:
+            return {}, []
+        return upsert_data, upsert_record
+
     def daily_read_storage(self, date, cursor):
         return []
 
@@ -1196,10 +1581,11 @@ class Worker():
         return record_df
 
     def pipeline(self, date):
-        # conn = psycopg2.connect(setting.PG_DSN["ens"])
-        # conn.autocommit = True
-        # cursor = conn.cursor()
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
 
+        failed_path = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/data/ens_decoded_failed/{}.log".format(date)
         record_df = self.daily_read_test(date)
         # Sort by block_timestamp
         record_df = record_df.sort_values(by='block_timestamp')
@@ -1208,16 +1594,23 @@ class Worker():
 
         for transaction_hash, group in grouped:
             # Sort transaction_index and log_index
-            # if transaction_hash == "0x702930e5682b781bfea735f7df1022f6a10c2daf8278d222065d820cb64995e3":
+            # if transaction_hash == "0x18a548144371310fd0489677f3fe3ab5313fdb9eca83292c570e65b97e54f17c":
             #     sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             #     length = len(sorted_group)
             #     print(transaction_hash, length)
-            #     self.transaction_process(sorted_group)
+            #     upsert_data, upsert_record = self.transaction_process(sorted_group)
+            #     self.save_ens_decoded_to_storage(upsert_data, cursor)
             #     break
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             length = len(sorted_group)
             print(transaction_hash, length)
-            self.transaction_process(sorted_group)
+            try:
+                upsert_data, upsert_record = self.transaction_process(sorted_group)
+                self.save_ens_decoded_to_storage(upsert_data, cursor)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                with open(failed_path, 'a+', encoding='utf-8') as fail:
+                    fail.write("transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
 
 
 if __name__ == "__main__":
