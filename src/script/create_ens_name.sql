@@ -1,7 +1,7 @@
 CREATE TABLE ens_name (
     id SERIAL PRIMARY KEY,
     namenode VARCHAR(66) NOT NULL,
-    name VARCHAR(255),
+    name VARCHAR(1024),
     label VARCHAR(66),
     erc721_token_id VARCHAR(255),
     erc1155_token_id VARCHAR(255),
@@ -34,6 +34,15 @@ CREATE TABLE ens_record (
     block_timestamp TIMESTAMP WITHOUT TIME ZONE,
     namenode VARCHAR(66) NOT NULL,
     transaction_hash VARCHAR(66) NOT NULL,
+    log_count INT NOT NULL,
+    is_registered BOOLEAN DEFAULT FALSE,
+    is_old_registered BOOLEAN DEFAULT FALSE,
+    is_new_registered BOOLEAN DEFAULT FALSE,
     update_record TEXT,
-    CONSTRAINT unique_ens_record UNIQUE (namenode, transaction_hash, log_index)
+    CONSTRAINT unique_ens_record UNIQUE (namenode, transaction_hash, log_count)
 );
+
+BEGIN;
+TRUNCATE TABLE public.ens_record;
+ALTER SEQUENCE public.ens_record_id_seq RESTART WITH 1;
+COMMIT;
