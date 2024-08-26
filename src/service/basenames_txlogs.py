@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:51:15
+LastEditTime: 2024-08-27 00:59:38
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -745,6 +745,37 @@ def decode_AddrChanged(data, topic0, topic1, topic2, topic3):
     return method_id, signature, decoded
 
 
+def decode_ContenthashChanged(data, topic0, topic1, topic2, topic3):
+    '''
+    description: ContenthashChanged(node,hash)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    node = topic1
+    contenthash = decode_ContenthashChanged_data(data)
+    decoded = {
+        "node": node,
+        "contenthash": contenthash,
+    }
+    return method_id, signature, decoded
+
+def decode_ContenthashChanged_data(data):
+    # Step 1: Remove the '0x' prefix if present
+    if data.startswith('0x'):
+        data = data[2:]
+    
+    # Step 2: Extract the length of the contenthash (which is in the second 32 bytes)
+    # The length is encoded in bytes 32 through 63, in hexadecimal format
+    length = int(data[64:128], 16) * 2  # Convert length from hex to int and multiply by 2 to account for hex chars
+
+    # Step 3: Extract the contenthash based on the length
+    contenthash = data[128:128 + length]
+
+    # Step 4: Re-add the '0x' prefix and return the decoded contenthash
+    return "0x" + contenthash
+
+
 def bytes32_to_address(bytes32_hex):
     # Ensure the input has '0x' and is of the correct length
     if bytes32_hex.startswith('0x'):
@@ -900,17 +931,13 @@ if __name__ == '__main__':
 
     # Example usage:
     data = "0x00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000d78797a2e6661726361737465720000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000056465727279000000000000000000000000000000000000000000000000000000"
-
     decoded_data = decode_TextChanged_data(data)
-
     print(f"Key: {decoded_data['key']}")
     print(f"Value: {decoded_data['value']}")
 
     # Example usage:
     data = "0x000000000000000000000000000000000000000000000000000000000000003c00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000014464102b996aaf50363305519177637cb58fe229d000000000000000000000000"
-
     decoded_data = decode_AddressChanged_data(data)
-
     print(f"Coin_type: {decoded_data['coin_type']}")
     print(f"New_address: {decoded_data['new_address']}")
 
@@ -937,5 +964,9 @@ if __name__ == '__main__':
     # Example usage
     hex_value = "0x00000000000000000000000000000000000000000000000000000001229ad623"
     expires = hex_to_uint256(hex_value)
-
     print(f"Expires (uint256): {expires}")
+
+    # Example usage
+    data = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000026e301017012201f73ef648e24c365ad5b4c8c0927213dd6f2dfd8b5bd1a053e1522b8d290f4220000000000000000000000000000000000000000000000000000"
+    contenthash = decode_ContenthashChanged_data(data)
+    print(f"Decoded Contenthash: {contenthash}")
