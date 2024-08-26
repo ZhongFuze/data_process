@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:59:38
+LastEditTime: 2024-08-27 01:18:52
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -366,7 +366,7 @@ class Fetcher():
 
                         if "data" in record_result["data"]:
                             for r in record_result["data"]["data"]:
-                                # block_number	block_timestamp	transaction_hash	transaction_index	log_index	address	data	topic0	topic1	topic2	topic3
+                                # block_number,block_timestamp,transaction_hash,transaction_index,log_index,address,data,topic0,topic1,topic2,topic3
                                 block_number = r[0]
                                 block_timestamp = r[1]
                                 transaction_hash = r[2]
@@ -374,11 +374,41 @@ class Fetcher():
                                 log_index = r[4]
                                 contract_address = r[5]
                                 contract_label = LABEL_MAP[contract_address]
-                                topic0 = r[6]
-                                if topic0 not in METHOD_MAP:
+                                input_data = r[6]
+                                topic0 = r[7]
+                                topic1 = r[8]
+                                topic2 = r[9]
+                                topic3 = r[10]
+                                method_id = ""
+                                signature = ""
+                                decoded = {}
+                                if topic0 == BASE_REVERSE_CLAIMED:
+                                    method_id, signature, decoded = decode_BaseReverseClaimed(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NEW_OWNER:
+                                    method_id, signature, decoded = decode_NewOwner(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NEW_RESOLVER:
+                                    method_id, signature, decoded = decode_NewResolver(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_NAME:
+                                    method_id, signature, decoded = decode_NameRegisteredWithName(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_RECORD:
+                                    method_id, signature, decoded = decode_NameRegisteredWithRecord(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_ID:
+                                    method_id, signature, decoded = decode_NameRegisteredWithID(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == TRANSFER:
+                                    method_id, signature, decoded = decode_Transfer(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == TEXT_CHANGED:
+                                    method_id, signature, decoded = decode_TextChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == ADDRESS_CHANGED:
+                                    method_id, signature, decoded = decode_AddressChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == ADDR_CHANGED:
+                                    method_id, signature, decoded = decode_AddrChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_CHANGED:
+                                    method_id, signature, decoded = decode_NameChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == CONTENTHASH_CHANGED:
+                                    method_id, signature, decoded = decode_ContenthashChanged(input_data, topic0, topic1, topic2, topic3)
+                                else:
+                                    logging.info("Loading Basenames [{}] method_id={} Skip".format(date, topic0))
                                     continue
-
-
                                 # method_id = r[6] # topic0
                                 # signature = "" # a map
                                 # block_number
@@ -390,7 +420,10 @@ class Fetcher():
                                 # method_id
                                 # signature
                                 # decoded
-                                pass
+                                write_str = format_str.format(
+                                    block_number, block_timestamp, transaction_hash, transaction_index, log_index,
+                                    contract_address, contract_label, method_id, signature, decoded)
+                                data_fw.write(write_str)
 
             data_fw.close()
             os.rename(data_path + ".loading", data_path)
@@ -630,11 +663,6 @@ def decode_Transfer(data, topic0, topic1, topic2, topic3):
     }
     return method_id, signature, decoded
 
-TEXT_CHANGED: "TextChanged(node,indexedKey,key,value)"
-ADDRESS_CHANGED: "AddressChanged(node,coinType,newAddress)"
-ADDR_CHANGED: "AddrChanged(node,address)"
-NAME_CHANGED: "NameChanged(node,name)"
-CONTENTHASH_CHANGED: "ContenthashChanged(node,hash)"
 
 def decode_TextChanged(data, topic0, topic1, topic2, topic3):
     '''
@@ -769,10 +797,10 @@ def decode_ContenthashChanged(data, topic0, topic1, topic2, topic3):
     method_id = topic0
     signature = METHOD_MAP[method_id]
     node = topic1
-    contenthash = decode_ContenthashChanged_data(data)
+    content_hash = decode_ContenthashChanged_data(data)
     decoded = {
         "node": node,
-        "contenthash": contenthash,
+        "contenthash": content_hash,
     }
     return method_id, signature, decoded
 
@@ -880,6 +908,7 @@ def compute_namehash_nowrapped(name):
     self_token_id = bytes32_to_uint256(self_label)
     return encode_hex(parent_node), self_label, self_token_id, encode_hex(self_node)
 
+
 def generate_label_hash(address):
     '''Calculate sha3HexAddress and namehash for reverse resolution'''
     hex_address = address.lower().replace("0x", "")
@@ -968,9 +997,9 @@ if __name__ == '__main__':
     print(f"AddrChanged address: {eth_address.lower()}")
 
     # address = "0x464102b996Aaf50363305519177637cb58Fe229d"
-    result = generate_label_hash(eth_address)
-    print(f"Label Hash: {result['label_hash']}")
-    print(f"Base Reverse Node: {result['base_reverse_node']}")
+    res = generate_label_hash(eth_address)
+    print(f"Label Hash: {res['label_hash']}")
+    print(f"Base Reverse Node: {res['base_reverse_node']}")
 
     # Example usage
     data = "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000f636f6e6563742e626173652e6574680000000000000000000000000000000000"
