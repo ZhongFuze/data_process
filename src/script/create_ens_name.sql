@@ -39,8 +39,10 @@ CREATE TABLE ens_record (
     is_old_registered BOOLEAN DEFAULT FALSE,
     is_new_registered BOOLEAN DEFAULT FALSE,
     update_record TEXT,
-    CONSTRAINT unique_ens_record UNIQUE (namenode, transaction_hash, log_count)
+    CONSTRAINT unique_ens_record UNIQUE (namenode, transaction_hash)
 );
+
+CREATE INDEX timestamp_ens_record_index ON ens_record (block_timestamp);
 
 BEGIN;
 TRUNCATE TABLE public.ens_record;
