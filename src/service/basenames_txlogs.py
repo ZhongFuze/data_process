@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:31:17
+LastEditTime: 2024-08-27 00:35:15
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -603,6 +603,29 @@ def decode_NameRegisteredWithRecord_data(data):
         'resolver': resolver,
         'ttl': ttl
     }
+
+
+def decode_NameRegisteredWithID(data, topic0, topic1, topic2, topic3):
+    '''
+    description: NameRegistered(id,owner,expires)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    erc721_token_id = bytes32_to_uint256(topic1)
+    owner = bytes32_to_address(topic2)
+    expires = hex_to_uint256(data)
+
+    label = uint256_to_bytes32(erc721_token_id)
+    node = bytes32_to_nodehash(BASE_ETH_NODE, label)
+    decoded = {
+        "node": node,
+        "label": label,
+        "erc721_token_id": erc721_token_id,
+        "owner": owner,
+        "expire_time": expires,
+    }
+    return method_id, signature, decoded
 
 
 def decode_TextChanged_data(data):
