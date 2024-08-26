@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:41:26
+LastEditTime: 2024-08-27 00:51:15
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -43,6 +43,7 @@ MAX_RETRY_TIMES = 3
 basenames_tx_raw_count = "690115"
 basenames_tx_raw_query = "690114"
 
+COIN_TYPE_ETH = "60"
 # ETH_NODE The node hash of "eth"
 ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 # BASE_ETH_NODE The node hash of "base.eth"
@@ -626,7 +627,6 @@ def decode_Transfer(data, topic0, topic1, topic2, topic3):
         "erc721_token_id": erc721_token_id,
         "from_address": from_address,
         "to_address": to_address,
-        "owner": to_address,
     }
     return method_id, signature, decoded
 
@@ -683,6 +683,23 @@ def decode_TextChanged_data(data):
     }
 
 
+def decode_AddressChanged(data, topic0, topic1, topic2, topic3):
+    '''
+    description: AddressChanged(node,coinType,newAddress)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    node = topic1
+    data_decoded = decode_AddressChanged_data(data)
+    decoded = {
+        "node": node,
+        "coin_type": data_decoded["coin_type"],
+        "new_address": data_decoded["new_address"],
+    }
+    return method_id, signature, decoded
+
+
 def decode_AddressChanged_data(data):
     # Remove '0x' if present
     if data.startswith('0x'):
@@ -709,6 +726,23 @@ def decode_AddressChanged_data(data):
         'coin_type': coin_type,
         'new_address': new_address_hex
     }
+
+
+def decode_AddrChanged(data, topic0, topic1, topic2, topic3):
+    '''
+    description: AddrChanged(node,address)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    node = topic1
+    new_address = bytes32_to_address(data)
+    decoded = {
+        "node": node,
+        "coin_type": COIN_TYPE_ETH,
+        "new_address": new_address,
+    }
+    return method_id, signature, decoded
 
 
 def bytes32_to_address(bytes32_hex):
