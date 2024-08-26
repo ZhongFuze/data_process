@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 22:18:38
+LastEditTime: 2024-08-27 01:56:45
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -26,6 +26,7 @@ from service.gnosis_domains import Fetcher as GnosisDomainsFetcher
 from service.farcaster_name import Fetcher as FarcasterNameFetcher
 from service.clusters_name import Fetcher as ClustersNameFetcher
 from service.ens_txlogs import Fetcher as ENSLogFetcher
+from service.basenames_txlogs import Fetcher as BasenamesFetcher
 
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
@@ -51,6 +52,13 @@ def ens_txlogs_offline_fetch():
 def ens_txlogs_offline_dump_to_db():
     logging.info("Starting ens_txlogs_offline_dump_to_db job...")
     ENSLogFetcher().offline_dump_to_db()
+
+def basenames_txlogs_dump_to_db():
+    start_date = "2024-07-26"
+    end_date = "2024-08-26"
+    logging.info("Starting basenames_txlogs_dump_to_db job...")
+    BasenamesFetcher().offline_dump(start_date, end_date)
+
 
 if __name__ == "__main__":
     # config = setting.load_settings(env="development")
@@ -95,7 +103,8 @@ if __name__ == "__main__":
         )
         scheduler.start()
 
-        ens_txlogs_offline_dump_to_db()
+        basenames_txlogs_dump_to_db()
+        # ens_txlogs_offline_dump_to_db()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

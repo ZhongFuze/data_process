@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 01:18:52
+LastEditTime: 2024-08-27 01:58:23
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -66,6 +66,8 @@ DEFAULT_GRACE_PERIOD = 90 # days
 # | RegistrarController | 0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5) |
 # | ReverseRegistrar    | 0x79ea96012eea67a83431f1701b3dff7e37f9e282) |
 # | L2Resolver          | 0xc6d566a56a1aff6508b41f6c90ff131615583bcd) |
+
+# 0xd3e6775ed9b7dc12b205c8e608dc3767b9e5efda missing some tx here for NameRegistered
 
 Registry = "0xb94704422c2a1e396835a571837aa5ae53285a95"
 BaseRegistrar = "0x03c4738ee98ae44591e1a4a4f3cab6641d95dd9a"
@@ -310,12 +312,57 @@ class Fetcher():
         except subprocess.CalledProcessError as ex:
             logging.exception(ex)
             return 0
-    
+
+    @classmethod
+    def date_range(cls, start_date, end_date):
+        '''
+        description: A function to generate a list of dates between start and end
+        return a list of dates
+        '''
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        step = timedelta(days=1)
+        date_list = []
+        while start <= end:
+            date_list.append(start.date().isoformat())
+            start += step
+        return date_list
+
+    def save_txlogs_storage(self, upsert_data, cursor):
+        sql_statement = """INSERT INTO public.basenames_txlogs (
+            block_number,
+            block_timestamp,
+            transaction_hash,
+            transaction_index,
+            log_index,
+            contract_address,
+            contract_label,
+            method_id,
+            signature,
+            decoded
+        ) VALUES %s
+        ON CONFLICT (transaction_hash, transaction_index, log_index)
+        DO UPDATE SET
+            contract_address = EXCLUDED.contract_address,
+            contract_label = EXCLUDED.contract_label,
+            method_id = EXCLUDED.method_id,
+            signature = EXCLUDED.signature,
+            decoded = EXCLUDED.decoded;
+        """
+        if upsert_data:
+            try:
+                execute_values(cursor, sql_statement, upsert_data)
+                logging.info(f"Basenames save_txlogs_storage. upsert_data count={len(upsert_data)}")
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during insert records in {}, sql={}, values={}".format(
+                    error_msg, sql_statement, json.dumps(upsert_data)))
+
     def daily_fetch(self, date, force=False):
         basenames_dirs = os.path.join(setting.Settings["datapath"], "basenames_txlogs")
         if not os.path.exists(basenames_dirs):
             os.makedirs(basenames_dirs)
-        
+
         data_path = os.path.join(basenames_dirs, date + ".tsv")
         base_ts = time.mktime(time.strptime(date, "%Y-%m-%d"))
         start_time = time.strftime(
@@ -326,10 +373,15 @@ class Fetcher():
         
         contract_list = [Registry, BaseRegistrar, RegistrarController, ReverseRegistrar, L2Resolver]
         try:
+            conn = psycopg2.connect(setting.PG_DSN["ens"])
+            conn.autocommit = True
+            cursor = conn.cursor()
+
             data_fw = open(data_path + ".loading", "w", encoding="utf-8")
             format_str = "\t".join(["{}"] * 10) + "\n"
 
             for contract in contract_list:
+                contract_label = LABEL_MAP[contract]
                 record_count = get_contract_txlogs_count(contract, start_time, end_time)
                 if os.path.exists(data_path):
                     # count line number
@@ -340,6 +392,7 @@ class Fetcher():
 
                 times = math.ceil(record_count / PER_COUNT)
                 for i in range(0, times):
+                    upsert_data = []
                     offset = i * PER_COUNT
                     query_params = {
                         "queryParameters": {
@@ -360,8 +413,8 @@ class Fetcher():
                         query_execution_id = record_result["data"].get("execution_id", "")
                         query_row_count = record_result["data"].get("total_row_count", 0)
                         query_ts = record_result["data"].get("execution_time_millis", 0)
-                        line_prefix = "Loading Basenames [{}], execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
-                            date, query_execution_id, record_count, offset, query_row_count, query_ts / 1000)
+                        line_prefix = "Loading Basenames [{}], contract=[{}] execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
+                            date, contract_label, query_execution_id, record_count, offset, query_row_count, query_ts / 1000)
                         logging.info(line_prefix)
 
                         if "data" in record_result["data"]:
@@ -422,8 +475,13 @@ class Fetcher():
                                 # decoded
                                 write_str = format_str.format(
                                     block_number, block_timestamp, transaction_hash, transaction_index, log_index,
-                                    contract_address, contract_label, method_id, signature, decoded)
+                                    contract_address, contract_label, method_id, signature, json.dumps(decoded))
                                 data_fw.write(write_str)
+
+                                upsert_data.append((
+                                    block_number, block_timestamp, transaction_hash, transaction_index, log_index,
+                                    contract_address, contract_label, method_id, signature, json.dumps(decoded)))
+                    self.save_txlogs_storage(upsert_data, cursor)
 
             data_fw.close()
             os.rename(data_path + ".loading", data_path)
@@ -432,7 +490,16 @@ class Fetcher():
             logging.exception(ex)
             with open(data_path + ".fail", 'a+', encoding='utf-8') as fail:
                 fail.write(repr(ex))
+        finally:
+            cursor.close()
+            conn.close()
 
+    def offline_dump(self, start_date, end_date):
+        logging.info(f"loading ENS offline data between {start_date} and {end_date}")
+        dates = self.date_range(start_date, end_date)
+        for date in dates:
+            self.daily_fetch(date)
+            break
 
 def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
     '''
