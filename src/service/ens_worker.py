@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-26 00:19:54
+LastEditTime: 2024-08-26 19:00:20
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -27,6 +27,8 @@ import traceback
 import subprocess
 import pandas as pd
 
+from urllib.parse import quote
+from urllib.parse import unquote
 from pprint import pprint
 from datetime import datetime, timedelta
 from psycopg2.extras import execute_values, execute_batch
