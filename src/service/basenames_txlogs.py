@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:08:17
+LastEditTime: 2024-08-27 00:16:57
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from psycopg2.extras import execute_values, execute_batch
 
 import struct
-from eth_utils import decode_hex, to_text, to_checksum_address, encode_hex, keccak, to_bytes, to_hex
+from eth_utils import decode_hex, to_text, to_checksum_address, encode_hex, keccak, to_bytes, to_hex, to_normalized_address
 
 
 import setting
@@ -479,6 +479,22 @@ def decode_NewOwner(data, topic0, topic1, topic2, topic3):
     return method_id, signature, decoded
 
 
+def decode_NewResolver(data, topic0, topic1, topic2, topic3):
+    '''
+    description: NewResolver(node,resolver)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    node = topic1
+    resolver = bytes32_to_address(data)
+    decoded = {
+        "node": node,
+        "resolver": resolver,
+    }
+    return method_id, signature, decoded
+
+
 def decode_NameRegistered_data(data):
     # Remove '0x' if present
     if data.startswith('0x'):
@@ -599,7 +615,9 @@ def bytes32_to_address(bytes32_hex):
     address = bytes32_hex[-40:]
 
     # Convert to a checksummed Ethereum address
-    return to_checksum_address('0x' + address)
+    # checksum = to_checksum_address('0x' + address)
+    normalized_address = to_normalized_address('0x' + address)
+    return normalized_address
 
 
 def convert_to_address(data):
@@ -714,8 +732,7 @@ if __name__ == '__main__':
     # Example usage
     bytes32_value = "0x000000000000000000000000c6d566a56a1aff6508b41f6c90ff131615583bcd"
     eth_address = bytes32_to_address(bytes32_value)
-
-    print(f"Ethereum Address: {eth_address.lower()}")
+    print(f"Ethereum Address: {eth_address}")
 
     id_hexstr = "0xd78198824bfa61144809ab9402e2de12ba7d8c5efa9b2867f8fb9e605ac05646"
     erc721_token_id = bytes32_to_uint256(id_hexstr)
