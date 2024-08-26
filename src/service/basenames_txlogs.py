@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:24:22
+LastEditTime: 2024-08-27 00:31:17
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -411,9 +411,9 @@ METHOD_MAP = {
     NAME_REGISTERED_WITH_NAME: "NameRegistered(name,label,owner,expires)",
 
     # Basenames: Base Registrar
-    TRANSFER: "Transfer(address_from,address_to,id)",
     NAME_REGISTERED_WITH_RECORD: "NameRegisteredWithRecord(id,owner,expires,resolver,ttl)",
     NAME_REGISTERED_WITH_ID: "NameRegistered(id,owner,expires)",
+    TRANSFER: "Transfer(address_from,address_to,id)",
 
     # Basenames: L2 Resolver
     TEXT_CHANGED: "TextChanged(node,indexedKey,key,value)",
@@ -507,7 +507,7 @@ def decode_NameRegisteredWithName(data, topic0, topic1, topic2, topic3):
     data_decoded = decode_NameRegistered_data(data)
     name = data_decoded["name"]
     expires = data_decoded["expires"]
-    
+
     node = bytes32_to_nodehash(BASE_ETH_NODE, label)
     erc721_token_id = bytes32_to_uint256(label)
     base_name = "{}.base.eth".format(name)
@@ -547,6 +547,35 @@ def decode_NameRegistered_data(data):
         'name': name,
         'expires': expires
     }
+
+
+def decode_NameRegisteredWithRecord(data, topic0, topic1, topic2, topic3):
+    '''
+    description: NameRegisteredWithRecord(id,owner,expires,resolver,ttl)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    erc721_token_id = bytes32_to_uint256(topic1)
+    owner = bytes32_to_address(topic2)
+
+    label = uint256_to_bytes32(erc721_token_id)
+    node = bytes32_to_nodehash(BASE_ETH_NODE, label)
+
+    data_decoded = decode_NameRegisteredWithRecord_data(data)
+    resolver = data_decoded["resolver"]
+    expires = data_decoded["expires"]
+    ttl = data_decoded["ttl"]
+    decoded = {
+        "node": node,
+        "label": label,
+        "erc721_token_id": erc721_token_id,
+        "owner": owner,
+        "expire_time": expires,
+        "resolver": resolver,
+        "ttl": ttl,
+    }
+    return method_id, signature, decoded
 
 
 def decode_NameRegisteredWithRecord_data(data):
@@ -663,6 +692,19 @@ def bytes32_to_uint256(value):
     trim_value = value.lstrip('0x')
     # Convert the bytes32 address back to a uint256 integer
     return str(int(trim_value, 16))
+
+
+def uint256_to_bytes32(value):
+    '''
+    description: uint256_to_bytes32
+    param: value uint256(str)
+    return: bytes32 address(0x64)
+    '''
+    # token ID uint256
+    # bytes32 address
+    # Convert the integer to a 64-character hexadecimal string (32 bytes)
+    int_value = int(value)
+    return '0x' + format(int_value, '064x')
 
 
 def bytes32_to_nodehash(base_node, value):
