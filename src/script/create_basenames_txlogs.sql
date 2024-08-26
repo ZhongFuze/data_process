@@ -9,10 +9,10 @@ CREATE TABLE basenames_txlogs (
     contract_label VARCHAR(66),
     method_id VARCHAR(66),
     signature TEXT,
-    decoded TEXT
+    decoded TEXT,
+    CONSTRAINT unique_basenames_txlogs UNIQUE (transaction_hash, transaction_index, log_index)
 );
 
-CREATE INDEX basenames_txlogs_index ON basenames_txlogs (transaction_hash, transaction_index, log_index);
 CREATE INDEX basenames_txlogs_timestamp_index ON basenames_txlogs (block_timestamp);
 
 BEGIN;
