@@ -745,6 +745,22 @@ def decode_AddrChanged(data, topic0, topic1, topic2, topic3):
     return method_id, signature, decoded
 
 
+def decode_NameChanged(data, topic0, topic1, topic2, topic3):
+    '''
+    description: NameChanged(node,name)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    node = topic1
+    base_name = bytes32_to_name(data)
+    decoded = {
+        "node": node,
+        "name": base_name,
+    }
+    return method_id, signature, decoded
+
+
 def decode_ContenthashChanged(data, topic0, topic1, topic2, topic3):
     '''
     description: ContenthashChanged(node,hash)
@@ -889,8 +905,8 @@ def bytes32_to_name(data):
     string_data = data[128:128 + length * 2]  # Each byte is represented by 2 hex chars
     
     # Step 4: Convert the hex string to a human-readable string (UTF-8)
-    decoded_string = bytes.fromhex(string_data).decode('utf-8')
-    
+    decoded_string = bytes.fromhex(string_data).decode('utf-8', errors='replace') # 'replace' will handle invalid sequences
+
     return decoded_string
 
 
