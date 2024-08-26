@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:39:39
+LastEditTime: 2024-08-27 00:41:26
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -399,29 +399,6 @@ class Fetcher():
             with open(data_path + ".fail", 'a+', encoding='utf-8') as fail:
                 fail.write(repr(ex))
 
-METHOD_MAP = {
-    # Basenames: Reverse Registrar
-    BASE_REVERSE_CLAIMED: "BaseReverseClaimed(addr,node)",
-
-    # Basenames: Registry
-    NEW_OWNER: "NewOwner(node,label,owner)",
-    NEW_RESOLVER: "NewResolver(node,resolver)",
-
-    # Basenames: Registrar Controller
-    NAME_REGISTERED_WITH_NAME: "NameRegistered(name,label,owner,expires)",
-
-    # Basenames: Base Registrar
-    NAME_REGISTERED_WITH_RECORD: "NameRegisteredWithRecord(id,owner,expires,resolver,ttl)",
-    NAME_REGISTERED_WITH_ID: "NameRegistered(id,owner,expires)",
-    TRANSFER: "Transfer(address_from,address_to,id)",
-
-    # Basenames: L2 Resolver
-    TEXT_CHANGED: "TextChanged(node,indexedKey,key,value)",
-    ADDRESS_CHANGED: "AddressChanged(node,coinType,newAddress)",
-    ADDR_CHANGED: "AddrChanged(node,address)",
-    NAME_CHANGED: "NameChanged(node,name)",
-    CONTENTHASH_CHANGED: "ContenthashChanged(node,hash)"
-}
 
 def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
     '''
@@ -650,6 +627,29 @@ def decode_Transfer(data, topic0, topic1, topic2, topic3):
         "from_address": from_address,
         "to_address": to_address,
         "owner": to_address,
+    }
+    return method_id, signature, decoded
+
+TEXT_CHANGED: "TextChanged(node,indexedKey,key,value)"
+ADDRESS_CHANGED: "AddressChanged(node,coinType,newAddress)"
+ADDR_CHANGED: "AddrChanged(node,address)"
+NAME_CHANGED: "NameChanged(node,name)"
+CONTENTHASH_CHANGED: "ContenthashChanged(node,hash)"
+
+def decode_TextChanged(data, topic0, topic1, topic2, topic3):
+    '''
+    description: TextChanged(node,indexedKey,key,value)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+
+    node = topic1
+    data_decoded = decode_TextChanged_data(data)
+    decoded = {
+        "node": node,
+        "key": data_decoded["key"],
+        "value": data_decoded["value"],
     }
     return method_id, signature, decoded
 
