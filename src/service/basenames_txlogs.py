@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 00:01:59
+LastEditTime: 2024-08-27 00:08:17
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -450,6 +450,35 @@ def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
     return method_id, signature, decoded
 
 
+def decode_NewOwner(data, topic0, topic1, topic2, topic3):
+    '''
+    description: NewOwner(node,label,owner)
+    return method_id, signature, decoded
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    parent_node = topic1
+    label = topic2
+    owner = bytes32_to_address(data)
+
+    reverse = False
+    if parent_node == BASE_ETH_NODE:
+        reverse = True
+    node = bytes32_to_nodehash(parent_node, label)
+    erc721_token_id = bytes32_to_uint256(label)
+
+    decoded = {
+        "reverse": reverse,
+        "parent_node": parent_node,
+        "node": node,
+        "label": label,
+        "erc721_token_id": erc721_token_id,
+        "owner": owner,
+    }
+    # if reverse is True, node is reverse_node
+    return method_id, signature, decoded
+
+
 def decode_NameRegistered_data(data):
     # Remove '0x' if present
     if data.startswith('0x'):
@@ -589,6 +618,24 @@ def bytes32_to_uint256(value):
     trim_value = value.lstrip('0x')
     # Convert the bytes32 address back to a uint256 integer
     return str(int(trim_value, 16))
+
+
+def bytes32_to_nodehash(base_node, value):
+    '''
+    description: bytes32_to_nodehash
+    param: value bytes32 type(label)=bytes32
+    return: bytes32 type(nodehash)=bytes32, hex_str
+    '''
+    # Calculate nodehash: keccak256(abi.encodePacked(base_node, label))
+    label_bytes = to_bytes(hexstr=value)
+    base_node_bytes = to_bytes(hexstr=base_node)
+
+    # concatenating base_node and label
+    packed_data = base_node_bytes + label_bytes
+
+    # Compute keccak256 hash (equivalent to Solidity's keccak256 function)
+    nodehash = keccak(packed_data)
+    return encode_hex(nodehash)
 
 
 def keccak256(data):
