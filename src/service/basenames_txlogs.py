@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 01:58:23
+LastEditTime: 2024-08-27 02:08:38
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -499,7 +499,7 @@ class Fetcher():
         dates = self.date_range(start_date, end_date)
         for date in dates:
             self.daily_fetch(date)
-            break
+
 
 def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
     '''
