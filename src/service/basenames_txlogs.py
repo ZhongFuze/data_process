@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-26 23:42:04
+LastEditTime: 2024-08-27 00:01:59
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -38,6 +38,25 @@ import setting
 DAY_SECONDS = 24 * 60 * 60
 PER_COUNT = 5000
 MAX_RETRY_TIMES = 3
+
+# QUERY_ID
+basenames_tx_raw_count = "690115"
+basenames_tx_raw_query = "690114"
+
+# ETH_NODE The node hash of "eth"
+ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
+# BASE_ETH_NODE The node hash of "base.eth"
+BASE_ETH_NODE = "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10"
+# REVERSE_NODE The node hash of "reverse"
+REVERSE_NODE = "0xa097f6721ce401e757d1223a763fef49b8b5f90bb18567ddb86fd205dff71d34"
+# ADDR_REVERSE_NODE The node hash of "addr.reverse"
+ADDR_REVERSE_NODE = "0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2"
+# BASE_REVERSE_NODE The ENSIP-19 compliant base-specific reverse node hash of "80002105.reverse"
+BASE_REVERSE_NODE = "0x08d9b0993eb8c4da57c37a4b84a6e384c2623114ff4e9370ed51c9b8935109ba"
+# GRACE_PERIOD the grace period for expired names
+DEFAULT_GRACE_PERIOD = 90 # days
+# BASE_ETH_NAME The dnsName of "base.eth" returned by NameEncoder.dnsEncode("base.eth")
+# bytes constant BASE_ETH_NAME = hex"04626173650365746800";
 
 # | Contract            | Address                                     |
 # | ------------------- | ------------------------------------------- |
@@ -102,26 +121,6 @@ METHOD_MAP = {
     NAME_CHANGED: "NameChanged(node,name)",
     CONTENTHASH_CHANGED: "ContenthashChanged(node,hash)"
 }
-
-
-# QUERY_ID
-basenames_tx_raw_count = "690115"
-basenames_tx_raw_query = "690114"
-
-# ETH_NODE The node hash of "eth"
-ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
-# BASE_ETH_NODE The node hash of "base.eth"
-BASE_ETH_NODE = "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10"
-# REVERSE_NODE The node hash of "reverse"
-REVERSE_NODE = "0xa097f6721ce401e757d1223a763fef49b8b5f90bb18567ddb86fd205dff71d34"
-# ADDR_REVERSE_NODE The node hash of "addr.reverse"
-ADDR_REVERSE_NODE = "0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2"
-# BASE_REVERSE_NODE The ENSIP-19 compliant base-specific reverse node hash of "80002105.reverse"
-BASE_REVERSE_NODE = "0x08d9b0993eb8c4da57c37a4b84a6e384c2623114ff4e9370ed51c9b8935109ba"
-# GRACE_PERIOD the grace period for expired names
-DEFAULT_GRACE_PERIOD = 90 # days
-# BASE_ETH_NAME The dnsName of "base.eth" returned by NameEncoder.dnsEncode("base.eth")
-# bytes constant BASE_ETH_NAME = hex"04626173650365746800";
 
 
 def execute_query(query_id, payload):
@@ -374,8 +373,13 @@ class Fetcher():
                                 log_index = r[4]
                                 contract_address = r[5]
                                 contract_label = LABEL_MAP[contract_address]
-                                method_id = r[6] # topic0
-                                signature = "" # a map
+                                topic0 = r[6]
+                                if topic0 not in METHOD_MAP:
+                                    continue
+
+
+                                # method_id = r[6] # topic0
+                                # signature = "" # a map
                                 # block_number
                                 # block_timestamp
                                 # transaction_hash
@@ -394,6 +398,57 @@ class Fetcher():
             logging.exception(ex)
             with open(data_path + ".fail", 'a+', encoding='utf-8') as fail:
                 fail.write(repr(ex))
+
+METHOD_MAP = {
+    # Basenames: Reverse Registrar
+    BASE_REVERSE_CLAIMED: "BaseReverseClaimed(addr,node)",
+
+    # Basenames: Registry
+    NEW_OWNER: "NewOwner(node,label,owner)",
+    NEW_RESOLVER: "NewResolver(node,resolver)",
+
+    # Basenames: Registrar Controller
+    NAME_REGISTERED_WITH_NAME: "NameRegistered(name,label,owner,expires)",
+
+    # Basenames: Base Registrar
+    TRANSFER: "Transfer(address_from,address_to,id)",
+    NAME_REGISTERED_WITH_RECORD: "NameRegisteredWithRecord(id,owner,expires,resolver,ttl)",
+    NAME_REGISTERED_WITH_ID: "NameRegistered(id,owner,expires)",
+
+    # Basenames: L2 Resolver
+    TEXT_CHANGED: "TextChanged(node,indexedKey,key,value)",
+    ADDRESS_CHANGED: "AddressChanged(node,coinType,newAddress)",
+    ADDR_CHANGED: "AddrChanged(node,address)",
+    NAME_CHANGED: "NameChanged(node,name)",
+    CONTENTHASH_CHANGED: "ContenthashChanged(node,hash)"
+}
+
+def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
+    '''
+    description: BaseReverseClaimed(addr,node)
+    return method_id, signature, decoded
+    # 80002105.reverse
+    '''
+    method_id = topic0
+    signature = METHOD_MAP[method_id]
+    reverse_address = bytes32_to_address(topic1)
+    reverse_node = topic2
+
+    generate_result = generate_label_hash(reverse_address)
+    reverse_label = generate_result["label_hash"]
+
+    reverse_name = "[{}].80002105.reverse".format(str(reverse_label).replace("0x", ""))
+    reverse_token_id = bytes32_to_uint256(reverse_node)
+
+    decoded = {
+        "reverse_node": reverse_node,
+        "reverse_name": reverse_name,
+        "reverse_label": reverse_label,
+        "reverse_token_id": reverse_token_id,
+        "reverse_address": reverse_address,
+    }
+    return method_id, signature, decoded
+
 
 def decode_NameRegistered_data(data):
     # Remove '0x' if present
