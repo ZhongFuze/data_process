@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 13:40:42
+LastEditTime: 2024-08-27 14:01:48
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -528,7 +528,7 @@ class Fetcher():
                     upsert_data[reverse_node] = {"namenode": reverse_node}
                 upsert_data[reverse_node]["namenode"] = reverse_node
                 upsert_data[reverse_node]["name"] = decoded["reverse_name"]
-                upsert_data[reverse_node]["label"] = decoded["reverse_name"]
+                upsert_data[reverse_node]["label"] = decoded["reverse_label"]
                 upsert_data[reverse_node]["erc721_token_id"] = decoded["reverse_token_id"]
                 upsert_data[reverse_node]["owner"] = decoded["reverse_address"]
                 upsert_data[reverse_node]["parent_node"] = BASE_REVERSE_NODE
