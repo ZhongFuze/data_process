@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 14:01:48
+LastEditTime: 2024-08-27 17:39:30
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -26,6 +26,7 @@ import traceback
 import subprocess
 import pandas as pd
 
+from web3 import Web3
 from urllib.parse import quote
 from urllib.parse import unquote
 from datetime import datetime, timedelta
@@ -46,7 +47,13 @@ MAX_RETRY_TIMES = 3
 basenames_tx_raw_count = "690115"
 basenames_tx_raw_query = "690114"
 
+basenames_tx_raw_query_by_block = "690118"
+basenames_tx_count_query_by_block = "690119"
+
 COIN_TYPE_ETH = "60"
+
+INITIALIZE_GENOME_BLOCK_NUMBER = 18960760
+
 # ETH_NODE The node hash of "eth"
 ETH_NODE = "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae"
 # BASE_ETH_NODE The node hash of "base.eth"
@@ -288,6 +295,123 @@ def fetch_txlogs_with_retry(params):
             raise ex
 
 
+def count_txlogs_by_block_with_retry(params):
+    execution_id = execute_query(basenames_tx_count_query_by_block, params)
+    time.sleep(15)
+
+    status = None
+    progress = None
+    max_times = 40
+    sleep_second = 15
+    cnt = 0
+
+    retry_times = 0
+    for i in range(0, MAX_RETRY_TIMES):
+        try:
+            while status != "FINISHED" and status != "FAILED" and cnt < max_times:
+                status_response = check_status(execution_id)
+                status = status_response['status']
+                progress = status_response.get('progress', 0)
+                cnt += 1
+                # print(f"{status} {progress}%")
+                if status is not None:
+                    if status == "FINISHED" or status == "FAILED":
+                        break
+                time.sleep(sleep_second)
+
+            if status == "FAILED":
+                raise Exception(f"Chainbase check_status[{status}], progress[{progress}]")
+            if cnt >= max_times:
+                raise Exception(f"Chainbase check_status timeout({sleep_second * max_times})")
+
+            time.sleep(2)
+            results = get_results(execution_id)
+            return results
+        except (ssl.SSLEOFError, ssl.SSLError) as ex:
+            # retry
+            error_msg = repr(ex)
+            if "Max retries exceeded" in error_msg:
+                retry_times += 1
+                logging.error("Chainbase API, retry_times({}): Max retries exceeded, Sleep 10s".format(i))
+                time.sleep(10)
+            else:
+                raise ex
+        except Exception as ex:
+            raise ex
+
+
+def get_txlogs_by_block_count(contract_address, start_block, end_block):
+    record_count = -1
+    payload = {
+        "queryParameters": {
+            "address": contract_address,
+            "start_block": str(start_block),
+            "end_block": str(end_block),
+        }
+    }
+
+    count_res = count_txlogs_by_block_with_retry(payload)
+    if count_res["code"] != 200:
+        err_msg = "Chainbase count failed:code:[{}], message[{}] payload = {}, result = {}".format(
+            count_res["code"], count_res["message"], json.dumps(payload), json.dumps(count_res))
+        raise Exception(err_msg)
+
+    if "data" in count_res:
+        if "data" in count_res["data"]:
+            if len(count_res["data"]["data"]) > 0:
+                record_count = count_res["data"]["data"][0][0]
+
+    if record_count == -1:
+        err_msg = "Chainbase count failed: record_count=-1, payload = {}, result = {}".format(
+            json.dumps(payload), json.dumps(count_res))
+        raise Exception(err_msg)
+
+    return record_count
+
+def fetch_txlogs_by_block_with_retry(params):
+    execution_id = execute_query(basenames_tx_raw_query_by_block, params)
+    time.sleep(15)
+
+    status = None
+    progress = None
+    max_times = 40
+    sleep_second = 15
+    cnt = 0
+
+    retry_times = 0
+    for i in range(0, MAX_RETRY_TIMES):
+        try:
+            while status != "FINISHED" and status != "FAILED" and cnt < max_times:
+                status_response = check_status(execution_id)
+                status = status_response['status']
+                progress = status_response.get('progress', 0)
+                cnt += 1
+                # print(f"{status} {progress}%")
+                if status is not None:
+                    if status == "FINISHED" or status == "FAILED":
+                        break
+                time.sleep(sleep_second)
+
+            if status == "FAILED":
+                raise Exception(f"Chainbase check_status[{status}], progress[{progress}]")
+            if cnt >= max_times:
+                raise Exception(f"Chainbase check_status timeout({sleep_second * max_times})")
+
+            time.sleep(2)
+            results = get_results(execution_id)
+            return results
+        except (ssl.SSLEOFError, ssl.SSLError) as ex:
+            # retry
+            error_msg = repr(ex)
+            if "Max retries exceeded" in error_msg:
+                retry_times += 1
+                logging.error("Chainbase API, retry_times({}): Max retries exceeded, Sleep 10s".format(i))
+                time.sleep(10)
+            else:
+                raise ex
+        except Exception as ex:
+            raise ex
+
 
 class Fetcher():
     '''
@@ -511,6 +635,7 @@ class Fetcher():
         log_count = 0
         is_registered = False
         transaction_hash = ""
+        block_datetime = ""
         block_unix = 0
         for _, row in grouped_records.iterrows():
             log_count += 1
@@ -854,7 +979,7 @@ class Fetcher():
             upsert_record[node]["log_count"] = log_count
             upsert_record[node]["is_registered"] = is_registered
 
-        return upsert_data, upsert_record
+        return block_datetime, upsert_data, upsert_record
 
     def pipeline(self, start_time, end_time):
         conn = psycopg2.connect(setting.PG_DSN["ens"])
@@ -876,7 +1001,7 @@ class Fetcher():
         for transaction_hash, group in grouped:
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             try:
-                upsert_data, upsert_record = self.transaction_process(sorted_group)
+                block_datetime, upsert_data, upsert_record = self.transaction_process(sorted_group)
                 self.save_basenames(upsert_data, cursor)
                 self.save_basenames_update_record(upsert_record, cursor)
                 logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
@@ -1005,7 +1130,6 @@ class Fetcher():
                 raise Exception("Caught exception during save_basenames_update_record in {}, sql={}, values={}".format(
                     error_msg, sql_statement, json.dumps(upsert_items)))
 
-
     def offline_process(self, start_date, end_date):
         logging.info(f"loading Basenames offline data between {start_date} and {end_date}")
         dates = self.date_range(start_date, end_date)
@@ -1017,6 +1141,246 @@ class Fetcher():
                 "%Y-%m-%d %H:%M:%S", time.localtime(base_ts + DAY_SECONDS))
             self.pipeline(start_time, end_time)
 
+    def get_latest_block_from_rpc(self):
+        '''
+        description: gnosis_blockNumber
+        '''
+        block_number = INITIALIZE_GENOME_BLOCK_NUMBER
+        try:
+            web3 = Web3(Web3.HTTPProvider('https://rpc.ankr.com/base'))
+            block_number = web3.eth.block_number
+        except Exception as ex:
+            logging.exception(ex)
+            block_number = INITIALIZE_GENOME_BLOCK_NUMBER
+        finally:
+            return int(block_number)
+
+    def get_latest_block_from_db(self, cursor):
+        '''
+        description: basenames blockNumber
+        '''
+        sql_query = "SELECT MAX(block_number) AS max_block_number FROM public.basenames_txlogs"
+        cursor.execute(sql_query)
+        result = cursor.fetchone()
+        if result:
+            max_block_number = int(result[0])
+            logging.info("Basenames Maximum Block Number: {}".format(max_block_number))
+            return max_block_number
+        else:
+            logging.info("Basenames Initialize Block Number: {}".format(INITIALIZE_GENOME_BLOCK_NUMBER))
+            return INITIALIZE_GENOME_BLOCK_NUMBER
+
+    def online_fetch(self, start_block, end_block, cursor):
+        # 按小时留存
+        basenames_process = os.path.join(setting.Settings["datapath"], "basenames_process")
+        if not os.path.exists(basenames_process):
+            os.makedirs(basenames_process)
+
+        format_str = "\t".join(["{}"] * 10) + "\n"
+        base_hour = time.strftime("%Y-%m-%d_%H", time.localtime(time.time()))
+        fetch_all_count = 0
+        try:
+            contract_list = [Registry, BaseRegistrar, RegistrarController, ReverseRegistrar, L2Resolver]
+            for contract in contract_list:
+                contract_label = LABEL_MAP[contract]
+                record_count = get_txlogs_by_block_count(contract, start_block, end_block)
+                if record_count <= 0:
+                    continue
+                times = math.ceil(record_count / PER_COUNT)
+                for i in range(0, times):
+                    upsert_data = []
+                    offset = i * PER_COUNT
+                    query_params = {
+                        "queryParameters": {
+                            "start_block": str(start_block),
+                            "end_block": str(end_block),
+                            "custom_offset": str(offset),
+                            "custom_limit": str(PER_COUNT),
+                            "address": contract,
+                        }
+                    }
+                    record_result = fetch_txlogs_by_block_with_retry(query_params)
+                    if record_result["code"] != 200:
+                        err_msg = "Chainbase fetch failed: code:[{}], message[{}], query_params={}".format(
+                            record_result["code"], record_result["message"], json.dumps(query_params))
+                        raise Exception(err_msg)
+                    if "data" in record_result:
+                        query_execution_id = record_result["data"].get("execution_id", "")
+                        query_row_count = record_result["data"].get("total_row_count", 0)
+                        query_ts = record_result["data"].get("execution_time_millis", 0)
+                        line_prefix = "Loading Basenames [start_block={}, end_block={}], contract=[{}] execution_id=[{}] all_count={}, offset={}, row_count={}, cost: {}".format(
+                            start_block, end_block, contract_label, query_execution_id, record_count, offset, query_row_count, query_ts / 1000)
+                        logging.info(line_prefix)
+
+                        if "data" in record_result["data"]:
+                            for r in record_result["data"]["data"]:
+                                # block_number,block_timestamp,transaction_hash,transaction_index,log_index,address,data,topic0,topic1,topic2,topic3
+                                block_number = r[0]
+                                block_timestamp = r[1]
+                                transaction_hash = r[2]
+                                transaction_index = r[3]
+                                log_index = r[4]
+                                contract_address = r[5]
+                                contract_label = LABEL_MAP[contract_address]
+                                input_data = r[6]
+                                topic0 = r[7]
+                                topic1 = r[8]
+                                topic2 = r[9]
+                                topic3 = r[10]
+                                method_id = ""
+                                signature = ""
+                                decoded = {}
+                                if topic0 == BASE_REVERSE_CLAIMED:
+                                    method_id, signature, decoded = decode_BaseReverseClaimed(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NEW_OWNER:
+                                    method_id, signature, decoded = decode_NewOwner(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NEW_RESOLVER:
+                                    method_id, signature, decoded = decode_NewResolver(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_NAME:
+                                    method_id, signature, decoded = decode_NameRegisteredWithName(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_RECORD:
+                                    method_id, signature, decoded = decode_NameRegisteredWithRecord(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_REGISTERED_WITH_ID:
+                                    method_id, signature, decoded = decode_NameRegisteredWithID(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == TRANSFER:
+                                    method_id, signature, decoded = decode_Transfer(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == TEXT_CHANGED:
+                                    method_id, signature, decoded = decode_TextChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == ADDRESS_CHANGED:
+                                    method_id, signature, decoded = decode_AddressChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == ADDR_CHANGED:
+                                    method_id, signature, decoded = decode_AddrChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == NAME_CHANGED:
+                                    method_id, signature, decoded = decode_NameChanged(input_data, topic0, topic1, topic2, topic3)
+                                elif topic0 == CONTENTHASH_CHANGED:
+                                    method_id, signature, decoded = decode_ContenthashChanged(input_data, topic0, topic1, topic2, topic3)
+                                else:
+                                    logging.debug("Loading Basenames [start_block={}, end_block={}] method_id={} Skip".format(start_block, end_block, topic0))
+                                    continue
+                                # method_id = r[6] # topic0
+                                # signature = "" # a map
+                                # block_number
+                                # block_timestamp
+                                # transaction_hash
+                                # transaction_index
+                                # log_index
+                                # contract_address # saving contract_label
+                                # method_id
+                                # signature
+                                # decoded
+
+                                write_str = format_str.format(
+                                    block_number, block_timestamp, transaction_hash, transaction_index, log_index,
+                                    contract_address, contract_label, method_id, signature, json.dumps(decoded))
+
+                                base_ts = time.mktime(time.strptime(block_timestamp, "%Y-%m-%d %H:%M:%S"))
+                                base_hour = time.strftime("%Y-%m-%d_%H", time.localtime(base_ts))
+                                data_path = os.path.join(basenames_process, base_hour + "_tx_logs")
+                                with open(data_path + ".tsv", 'a+', encoding='utf-8') as data_fw:
+                                    data_fw.write(write_str)
+
+                                upsert_data.append((
+                                    block_number, block_timestamp, transaction_hash, transaction_index, log_index,
+                                    contract_address, contract_label, method_id, signature, json.dumps(decoded)))
+                                fetch_all_count += 1
+
+                    self.save_txlogs_storage(upsert_data, cursor)
+        except Exception as ex:
+            logging.exception(ex)
+            error_msg = traceback.format_exc()
+            data_path = os.path.join(basenames_process, base_hour + "_tx_logs")
+            with open(data_path + ".fail", 'a+', encoding='utf-8') as fail:
+                fail.write("Basenames txlogs fetch start_block={}, end_block={} error_msg: {}\n".format(start_block, end_block, error_msg))
+        finally:
+            return fetch_all_count
+
+    def online_pipeline(self, start_block, end_block, cursor):
+        basenames_process = os.path.join(setting.Settings["datapath"], "basenames_process")
+        if not os.path.exists(basenames_process):
+            os.makedirs(basenames_process)
+
+        block_datetime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+        record_df = self.read_records_by_block(start_block, end_block, cursor)
+        # Sort by block_timestamp
+        record_df = record_df.sort_values(by='block_timestamp')
+        # Group by transaction_hash
+        grouped = record_df.groupby('transaction_hash', sort=False)
+        logging.info("Basenames process from start_block={} to end_block={} transaction_hash record count={}, start_at={}".format(
+            start_block, end_block, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+        for transaction_hash, group in grouped:
+            sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
+            try:
+                block_datetime, upsert_data, upsert_record = self.transaction_process(sorted_group)
+                self.save_basenames(upsert_data, cursor)
+                self.save_basenames_update_record(upsert_record, cursor)
+                logging.debug("Basenames process transaction_hash {} Done".format(transaction_hash))
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                base_ts = time.mktime(time.strptime(block_datetime, "%Y-%m-%d %H:%M:%S"))
+                base_hour = time.strftime("%Y-%m-%d_%H", time.localtime(base_ts))
+                failed_path = os.path.join(basenames_process, base_hour)
+                with open(failed_path, 'a+', encoding='utf-8') as fail:
+                    fail.write("Basenames transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
+
+        logging.info("Basenames process from start_block={} to end_block={} transaction_hash record count={}, end_at={}".format(
+            start_block, end_block, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+
+    def read_records_by_block(self, start_block, end_block, cursor):
+        ssql = """
+            SELECT block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded
+            FROM public.basenames_txlogs
+            WHERE block_number >= {} AND block_number < {}
+        """
+        cursor.execute(ssql.format(start_block, end_block))
+        rows = cursor.fetchall()
+        columns = ['block_number', 'block_timestamp', 'transaction_hash', 'transaction_index', 'log_index', 
+               'contract_address', 'contract_label', 'method_id', 'signature', 'decoded']
+        record_df = pd.DataFrame(rows, columns=columns)
+        record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
+        record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
+        return record_df
+
+    def online_dump(self):
+        '''
+        description: Real-time data dumps to database.
+        '''
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        start_block_number = self.get_latest_block_from_db(cursor)
+        end_block_number = self.get_latest_block_from_rpc()
+        if end_block_number <= start_block_number:
+            logging.info("Basenames transactions online dump failed! Invalid start_block={}, end_block={}".format(
+                start_block_number, end_block_number))
+            return
+
+        basenames_process = os.path.join(setting.Settings["datapath"], "basenames_process")
+        if not os.path.exists(basenames_process):
+            os.makedirs(basenames_process)
+
+        start = time.time()
+        logging.info("Basenames transactions online dump start_block={}, end_block={} start at: {}".format(
+            start_block_number, end_block_number, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
+
+        try:
+            fetch_all_count = self.online_fetch(start_block_number, end_block_number, cursor)
+            end = time.time()
+            ts_delta = end - start
+            logging.info("Basenames transactions online dump start_block={}, end_block={} end at: {}".format(
+                start_block_number, end_block_number, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
+            logging.info("Basenames transactions online dump start_block={}, end_block={} record count: {}".format(
+                start_block_number, end_block_number, fetch_all_count))
+            logging.info("Basenames transactions online dump start_block={}, end_block={} spends: {}".format(
+                start_block_number, end_block_number, ts_delta))
+
+            self.online_pipeline(start_block_number, end_block_number, cursor)
+        except Exception as ex:
+            error_msg = traceback.format_exc()
+            logging.error("Basenames transactions online dump: Exception occurs error! {}".format(error_msg))
+        finally:
+            cursor.close()
+            conn.close()
 
 
 def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
@@ -1543,6 +1907,10 @@ def hex_to_uint256(hex_value):
 
 
 if __name__ == '__main__':
+    block_number = Fetcher().get_latest_block_from_rpc()
+    print(f"Latest block_number: {block_number}")
+    exit()
+
     # Example usage:
     data = "0x00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000068a927630000000000000000000000000000000000000000000000000000000000000011657665727964617963727970746f677579000000000000000000000000000000"
 

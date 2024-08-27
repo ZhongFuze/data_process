@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 13:40:11
+LastEditTime: 2024-08-27 17:40:56
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -42,6 +42,9 @@ def clusters_name_job():
     logging.info("Starting clusters_name_job online fetch job...")
     ClustersNameFetcher().online_dump()
 
+def basenames_job():
+    logging.info("Starting basenames_job online fetch job...")
+    BasenamesFetcher().online_dump()
 
 def ens_txlogs_offline_fetch():
     start_date = "2020-02-04"
@@ -110,7 +113,8 @@ if __name__ == "__main__":
         )
         scheduler.start()
 
-        basenames_offline_process()
+        basenames_job()
+        # basenames_offline_process()
         # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_dump_to_db()
         while True:
