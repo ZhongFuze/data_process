@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 17:39:30
+LastEditTime: 2024-08-27 18:28:15
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -586,7 +586,7 @@ class Fetcher():
                                 elif topic0 == CONTENTHASH_CHANGED:
                                     method_id, signature, decoded = decode_ContenthashChanged(input_data, topic0, topic1, topic2, topic3)
                                 else:
-                                    logging.info("Loading Basenames [{}] method_id={} Skip".format(date, topic0))
+                                    # logging.info("Loading Basenames [{}] method_id={} Skip".format(date, topic0))
                                     continue
                                 # method_id = r[6] # topic0
                                 # signature = "" # a map
@@ -1004,7 +1004,7 @@ class Fetcher():
                 block_datetime, upsert_data, upsert_record = self.transaction_process(sorted_group)
                 self.save_basenames(upsert_data, cursor)
                 self.save_basenames_update_record(upsert_record, cursor)
-                logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
+                # logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 with open(failed_path, 'a+', encoding='utf-8') as fail:
@@ -1255,7 +1255,7 @@ class Fetcher():
                                 elif topic0 == CONTENTHASH_CHANGED:
                                     method_id, signature, decoded = decode_ContenthashChanged(input_data, topic0, topic1, topic2, topic3)
                                 else:
-                                    logging.debug("Loading Basenames [start_block={}, end_block={}] method_id={} Skip".format(start_block, end_block, topic0))
+                                    # logging.debug("Loading Basenames [start_block={}, end_block={}] method_id={} Skip".format(start_block, end_block, topic0))
                                     continue
                                 # method_id = r[6] # topic0
                                 # signature = "" # a map
@@ -1349,6 +1349,8 @@ class Fetcher():
         cursor = conn.cursor()
 
         start_block_number = self.get_latest_block_from_db(cursor)
+        # for refetch block number
+        start_block_number = start_block_number - 600
         end_block_number = self.get_latest_block_from_rpc()
         if end_block_number <= start_block_number:
             logging.info("Basenames transactions online dump failed! Invalid start_block={}, end_block={}".format(
@@ -1909,7 +1911,6 @@ def hex_to_uint256(hex_value):
 if __name__ == '__main__':
     block_number = Fetcher().get_latest_block_from_rpc()
     print(f"Latest block_number: {block_number}")
-    exit()
 
     # Example usage:
     data = "0x00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000068a927630000000000000000000000000000000000000000000000000000000000000011657665727964617963727970746f677579000000000000000000000000000000"
