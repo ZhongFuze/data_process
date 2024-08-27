@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 02:08:38
+LastEditTime: 2024-08-27 12:46:08
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -24,7 +24,10 @@ import psycopg2
 import requests
 import traceback
 import subprocess
+import pandas as pd
 
+from urllib.parse import quote
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 from psycopg2.extras import execute_values, execute_batch
 
@@ -369,8 +372,7 @@ class Fetcher():
             "%Y-%m-%d %H:%M:%S", time.localtime(base_ts))
         end_time = time.strftime(
             "%Y-%m-%d %H:%M:%S", time.localtime(base_ts + DAY_SECONDS))
-        
-        
+
         contract_list = [Registry, BaseRegistrar, RegistrarController, ReverseRegistrar, L2Resolver]
         try:
             conn = psycopg2.connect(setting.PG_DSN["ens"])
@@ -495,10 +497,493 @@ class Fetcher():
             conn.close()
 
     def offline_dump(self, start_date, end_date):
-        logging.info(f"loading ENS offline data between {start_date} and {end_date}")
+        logging.info(f"loading Basenames offline data between {start_date} and {end_date}")
         dates = self.date_range(start_date, end_date)
         for date in dates:
             self.daily_fetch(date)
+
+    def transaction_process(self, grouped_records):
+        '''
+        description: Single transaction_hash processing
+        '''
+        upsert_record = {}
+        upsert_data = {}
+        log_count = 0
+        is_registered = False
+        transaction_hash = ""
+        block_unix = 0
+        for _, row in grouped_records.iterrows():
+            block_datetime = row["block_timestamp"]
+            block_unix = row["block_unix"]
+            transaction_hash = row["transaction_hash"]
+            log_index = row["log_index"]
+            method_id = row["method_id"]
+            signature = row["signature"]
+            decoded_str = row["decoded"]
+            if method_id == BASE_REVERSE_CLAIMED:
+                decoded = json.loads(decoded_str)
+                reverse_node  = decoded["reverse_node"]
+                if reverse_node not in upsert_data:
+                    upsert_data[reverse_node] = {"namenode": reverse_node}
+                upsert_data[reverse_node]["namenode"] = reverse_node
+                upsert_data[reverse_node]["name"] = decoded["reverse_name"]
+                upsert_data[reverse_node]["label"] = decoded["reverse_name"]
+                upsert_data[reverse_node]["erc721_token_id"] = decoded["reverse_token_id"]
+                upsert_data[reverse_node]["owner"] = decoded["reverse_address"]
+                upsert_data[reverse_node]["parent_node"] = BASE_REVERSE_NODE
+                upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
+                upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
+                upsert_data[reverse_node]["reverse_address"] = decoded["reverse_address"]
+
+                if reverse_node not in upsert_record:
+                    upsert_record[reverse_node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": reverse_node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[reverse_node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
+
+            elif method_id == NEW_OWNER:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
+                upsert_data[node]["parent_node"] = decoded["parent_node"]
+                upsert_data[node]["label"] = decoded["label"]
+                upsert_data[node]["owner"] = decoded["owner"]
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+                is_reverse = decoded["reverse"]
+                if is_reverse is True:
+                    # update reverse_address in `NewOwner`
+                    reverse_address = decoded["owner"]
+                    generate_result = generate_label_hash(reverse_address)
+                    reverse_label = generate_result["label_hash"]
+                    reverse_node = generate_result["base_reverse_node"]
+                    reverse_name = "[{}].80002105.reverse".format(str(reverse_label).replace("0x", ""))
+                    reverse_token_id = bytes32_to_uint256(reverse_node)
+
+                    if reverse_node not in upsert_data:
+                        upsert_data[reverse_node] = {"namenode": reverse_node}
+                    upsert_data[reverse_node]["namenode"] = reverse_node
+                    upsert_data[reverse_node]["name"] = reverse_name
+                    upsert_data[reverse_node]["label"] = reverse_label
+                    upsert_data[reverse_node]["erc721_token_id"] = reverse_token_id
+                    upsert_data[reverse_node]["owner"] = reverse_address
+                    upsert_data[reverse_node]["parent_node"] = BASE_REVERSE_NODE
+                    upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
+                    upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
+                    upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                    if reverse_node not in upsert_record:
+                        upsert_record[reverse_node] = {
+                            "block_timestamp": unix_string_to_datetime(block_unix),
+                            "namenode": reverse_node,
+                            "transaction_hash": transaction_hash,
+                            "update_record": {}
+                        }
+                    upsert_record[reverse_node]["update_record"][log_index] = {
+                        "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
+
+            elif method_id == NEW_RESOLVER:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["resolver"] = decoded["resolver"]
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == NAME_REGISTERED_WITH_NAME:
+                is_registered = True
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = decoded["node"]
+                upsert_data[node]["name"] = decoded["name"]
+                upsert_data[node]["label"] = decoded["label"]
+                upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
+                upsert_data[node]["owner"] = decoded["owner"]
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(decoded["expire_time"])
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == NAME_REGISTERED_WITH_RECORD:
+                is_registered = True
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = decoded["node"]
+                upsert_data[node]["label"] = decoded["label"]
+                upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
+                upsert_data[node]["owner"] = decoded["owner"]
+                upsert_data[node]["resolver"] = decoded["resolver"]
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(decoded["expire_time"])
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == NAME_REGISTERED_WITH_ID:
+                is_registered = True
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = decoded["node"]
+                upsert_data[node]["label"] = decoded["label"]
+                upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
+                upsert_data[node]["owner"] = decoded["owner"]
+                upsert_data[node]["expire_time"] = unix_string_to_datetime(decoded["expire_time"])
+                upsert_data[node]["registration_time"] = unix_string_to_datetime(block_unix)
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == TRANSFER:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = decoded["node"]
+                upsert_data[node]["label"] = decoded["label"]
+                upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
+                upsert_data[node]["owner"] = decoded["to_address"]
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == TEXT_CHANGED:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                texts_key = decoded["key"]
+                texts_val = decoded["value"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+
+                if texts_key != "":
+                    if "key_value" not in upsert_data[node]:
+                        upsert_data[node]["key_value"] = {}
+                    upsert_data[node]["key_value"][texts_key] = texts_val
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == ADDRESS_CHANGED:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                coin_type = decoded["coin_type"]
+                new_address = decoded["new_address"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+
+                # resolved_records
+                upsert_data[node]["namenode"] = node
+                if "resolved_records" not in upsert_data[node]:
+                    upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
+                upsert_data[node]["resolved_records"][str(coin_type)] = new_address
+                if coin_type == COIN_TYPE_ETH:
+                    upsert_data[node]["resolved_address"] = new_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == ADDR_CHANGED:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                coin_type = decoded["coin_type"]
+                new_address = decoded["new_address"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["resolved_address"] = new_address
+
+                if "resolved_records" not in upsert_data[node]:
+                    upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
+                upsert_data[node]["resolved_records"][str(coin_type)] = new_address
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == NAME_CHANGED:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                name = decoded["name"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["name"] = name
+
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+            elif method_id == CONTENTHASH_CHANGED:
+                decoded = json.loads(decoded_str)
+                node = decoded["node"]
+                contenthash = decoded["contenthash"]
+                if node not in upsert_data:
+                    upsert_data[node] = {"namenode": node}
+                upsert_data[node]["namenode"] = node
+                upsert_data[node]["contenthash"] = contenthash
+                
+                if node not in upsert_record:
+                    upsert_record[node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+        for node in upsert_data:
+            upsert_data[node]["update_time"] = unix_string_to_datetime(block_unix)
+            upsert_record[node]["log_count"] = log_count
+            upsert_record[node]["is_registered"] = is_registered
+
+        return upsert_data, upsert_record
+
+    def pipeline(self, start_time, end_time):
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        basenames_process = os.path.join(setting.Settings["datapath"], "basenames_process")
+        if not os.path.exists(basenames_process):
+            os.makedirs(basenames_process)
+
+        failed_path = os.path.join(basenames_process, "{}-to-{}.fail".format(start_time, end_time))
+        record_df = self.read_records(cursor, start_time, end_time)
+        # Sort by block_timestamp
+        record_df = record_df.sort_values(by='block_timestamp')
+        # Group by transaction_hash
+        grouped = record_df.groupby('transaction_hash', sort=False)
+        logging.info("Basenames process {}-{} transaction_hash record count={}, start_at={}".format(
+            start_time, end_time, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+        for transaction_hash, group in grouped:
+            sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
+            try:
+                upsert_data, upsert_record = self.transaction_process(sorted_group)
+                self.save_basenames(upsert_data, cursor)
+                self.save_basenames_update_record(upsert_record, cursor)
+                logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                with open(failed_path, 'a+', encoding='utf-8') as fail:
+                    fail.write("Basenames transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
+
+        cursor.close()
+        conn.close()
+
+    def read_records(self, cursor, start_time, end_time):
+        ssql = """
+            SELECT block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded
+            FROM public.basenames_txlogs
+            WHERE block_timestamp >='{}' AND block_timestamp < '{}'
+        """
+        cursor.execute(ssql.format(start_time, end_time))
+        rows = cursor.fetchall()
+        columns = ['block_number', 'block_timestamp', 'transaction_hash', 'transaction_index', 'log_index', 
+               'contract_address', 'contract_label', 'method_id', 'signature', 'decoded']
+        record_df = pd.DataFrame(rows, columns=columns)
+        record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
+        record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
+        return record_df
+
+    def save_basenames(self, upsert_data, cursor):
+        for namenode, record in upsert_data.items():
+            insert_fields = ['namenode']  # Always insert `namenode`
+            insert_values = [namenode]  # Value for `namenode`
+            update_fields = []  # Fields to update in case of conflict
+
+            field_mapping = {
+                "name": "name",
+                "label": "label",
+                "erc721_token_id": "erc721_token_id",
+                "parent_node": "parent_node",
+                "registration_time": "registration_time",
+                "expire_time": "expire_time",
+                "owner": "owner",
+                "resolver": "resolver",
+                "resolved_address": "resolved_address",
+                "reverse_address": "reverse_address",
+                "contenthash": "contenthash",
+                "update_time": "update_time",
+                "resolved_records": "resolved_records",  # JSONB
+                "key_value": "key_value"  # JSONB
+            }
+
+            jsonb_update = []
+            for key, field in field_mapping.items():
+                if key in record:
+                    if key in ["resolved_records", "key_value"]:
+                        kv_fields = []
+                        for k, v in record[key].items():
+                            vv = quote(v, 'utf-8')  # convert string to url-encoded
+                            kv_fields.append("'" + k + "'")
+                            kv_fields.append("'" + vv + "'")
+                        jsonb_data = ",".join(kv_fields)
+
+                        # Handle JSONB fields using jsonb_build_object
+                        jsonb_update.append(f"{key} = {key} || jsonb_build_object({jsonb_data})")
+                    else:
+                        insert_fields.append(field)
+                        insert_values.append(record[key])
+                        update_fields.append(f"{field} = EXCLUDED.{field}")
+
+            # Build the `INSERT ON CONFLICT` query
+            insert_fields_sql = ', '.join(insert_fields)
+            insert_placeholders_sql = ', '.join(['%s'] * len(insert_values))
+            update_fields_sql = ', '.join(update_fields)
+            sql = f"""
+                INSERT INTO basenames ({insert_fields_sql})
+                VALUES ({insert_placeholders_sql})
+                ON CONFLICT (namenode)
+                DO UPDATE SET {update_fields_sql}
+            """
+            try:
+                cursor.execute(sql, insert_values)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during insert in {}, sql={}, values={}".format(error_msg, sql, json.dumps(insert_values)))
+
+            # Build the `UPDATE JSONB` query
+            if jsonb_update:
+                set_jsonb = ",".join(jsonb_update)
+                update_jsonb_sql = f"""
+                    UPDATE basenames SET {set_jsonb} WHERE namenode = '{namenode}'
+                """
+                try:
+                    cursor.execute(update_jsonb_sql)
+                except Exception as ex:
+                    error_msg = traceback.format_exc()
+                    raise Exception("Caught exception during update jsonb in {}, sql={}".format(error_msg, update_jsonb_sql))
+
+    def save_basenames_update_record(self, upsert_record, cursor):
+        sql_statement = """INSERT INTO public.basenames_record (
+            block_timestamp,
+            namenode,
+            transaction_hash,
+            log_count,
+            is_registered,
+            update_record
+        ) VALUES %s
+        ON CONFLICT (namenode, transaction_hash)
+        DO UPDATE SET
+            log_count = EXCLUDED.log_count,
+            is_registered = EXCLUDED.is_registered,
+            update_record = EXCLUDED.update_record;
+        """
+        upsert_items = []
+        for namenode, record in upsert_record.items():
+            update_record = json.dumps(record["update_record"])
+            is_registered = record.get("is_registered", False)
+            upsert_items.append(
+                (record["block_timestamp"], namenode, record["transaction_hash"], record["log_count"], is_registered, update_record)
+            )
+
+        if upsert_items:
+            try:
+                execute_values(cursor, sql_statement, upsert_items)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during save_basenames_update_record in {}, sql={}, values={}".format(
+                    error_msg, sql_statement, json.dumps(upsert_items)))
+
+
+    def offline_process(self, start_date, end_date):
+        logging.info(f"loading Basenames offline data between {start_date} and {end_date}")
+        dates = self.date_range(start_date, end_date)
+        for date in dates:
+            base_ts = time.mktime(time.strptime(date, "%Y-%m-%d"))
+            start_time = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(base_ts))
+            end_time = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(base_ts + DAY_SECONDS))
+            self.pipeline(start_time, end_time)
+
 
 
 def decode_BaseReverseClaimed(data, topic0, topic1, topic2, topic3):
@@ -932,6 +1417,15 @@ def uint256_to_bytes32(value):
     return '0x' + format(int_value, '064x')
 
 
+def unix_string_to_datetime(value):
+    '''
+    description: parse unix_string to datetime format "%Y-%m-%d %H:%M:%S"
+    return {*}
+    '''
+    unix_i64 = int(value)
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(unix_i64))
+
+
 def bytes32_to_nodehash(base_node, value):
     '''
     description: bytes32_to_nodehash
@@ -1010,7 +1504,7 @@ def hex_to_uint256(hex_value):
     # Remove the '0x' prefix if present
     if hex_value.startswith('0x'):
         hex_value = hex_value[2:]
-    
+
     # Convert the hex string to an integer
     return int(hex_value, 16)
 
