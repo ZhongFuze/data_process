@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 01:56:45
+LastEditTime: 2024-08-27 13:40:11
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -59,6 +59,12 @@ def basenames_txlogs_dump_to_db():
     logging.info("Starting basenames_txlogs_dump_to_db job...")
     BasenamesFetcher().offline_dump(start_date, end_date)
 
+def basenames_offline_process():
+    start_date = "2024-07-26"
+    end_date = "2024-08-26"
+    logging.info("Starting basenames_offline_process job...")
+    BasenamesFetcher().offline_process(start_date, end_date)
+
 
 if __name__ == "__main__":
     # config = setting.load_settings(env="development")
@@ -67,6 +73,7 @@ if __name__ == "__main__":
         os.makedirs(config["server"]["log_path"])
     logger.InitLogger(config)
     logger.SetLoggerName("data_process")
+    scheduler = None
     try:
         # CrossbellFeedsFetcher().offline_dump()
         # LensTransferFetcher().offline_transfer("2022-05-16", "2023-07-16")
@@ -103,7 +110,8 @@ if __name__ == "__main__":
         )
         scheduler.start()
 
-        basenames_txlogs_dump_to_db()
+        basenames_offline_process()
+        # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_dump_to_db()
         while True:
             time.sleep(60)

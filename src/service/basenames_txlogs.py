@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 12:46:08
+LastEditTime: 2024-08-27 13:40:42
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -513,6 +513,7 @@ class Fetcher():
         transaction_hash = ""
         block_unix = 0
         for _, row in grouped_records.iterrows():
+            log_count += 1
             block_datetime = row["block_timestamp"]
             block_unix = row["block_unix"]
             transaction_hash = row["transaction_hash"]
@@ -548,11 +549,12 @@ class Fetcher():
             elif method_id == NEW_OWNER:
                 decoded = json.loads(decoded_str)
                 node = decoded["node"]
+                parent_node = decoded["parent_node"]
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
-                upsert_data[node]["parent_node"] = decoded["parent_node"]
+                upsert_data[node]["parent_node"] = parent_node
                 upsert_data[node]["label"] = decoded["label"]
                 upsert_data[node]["owner"] = decoded["owner"]
 
@@ -566,7 +568,9 @@ class Fetcher():
                 upsert_record[node]["update_record"][log_index] = {
                     "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
-                is_reverse = decoded["reverse"]
+                is_reverse = False
+                if parent_node == BASE_REVERSE_NODE:
+                    is_reverse = True
                 if is_reverse is True:
                     # update reverse_address in `NewOwner`
                     reverse_address = decoded["owner"]
@@ -743,7 +747,7 @@ class Fetcher():
                 if "resolved_records" not in upsert_data[node]:
                     upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
                 upsert_data[node]["resolved_records"][str(coin_type)] = new_address
-                if coin_type == COIN_TYPE_ETH:
+                if str(coin_type) == COIN_TYPE_ETH:
                     upsert_data[node]["resolved_address"] = new_address
 
                 if node not in upsert_record:
@@ -787,7 +791,34 @@ class Fetcher():
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
-                upsert_data[node]["name"] = name
+
+                parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped(name)
+                if node == self_node:
+                    # normal resolved
+                    upsert_data[node]["name"] = name
+                else:
+                    # reverse resolved
+                    if node in upsert_data:
+                        if "reverse_address" in upsert_data[node]:
+                            reverse_address = upsert_data[node]["reverse_address"]
+                            if self_node not in upsert_data:
+                                upsert_data[self_node] = {"namenode": self_node}
+                            upsert_data[self_node]["namenode"] = self_node
+                            upsert_data[self_node]["name"] = name
+                            upsert_data[self_node]["label"] = self_label
+                            upsert_data[self_node]["erc721_token_id"] = self_token_id
+                            upsert_data[self_node]["parent_node"] = parent_node
+                            upsert_data[self_node]["reverse_address"] = reverse_address
+
+                            if self_node not in upsert_record:
+                                upsert_record[self_node] = {
+                                    "block_timestamp": unix_string_to_datetime(block_unix),
+                                    "namenode": self_node,
+                                    "transaction_hash": transaction_hash,
+                                    "update_record": {}
+                                }
+                            upsert_record[self_node]["update_record"][log_index] = {
+                                "signature": signature, "upsert_data": copy.deepcopy(upsert_data[self_node])}
 
                 if node not in upsert_record:
                     upsert_record[node] = {
@@ -854,6 +885,8 @@ class Fetcher():
                 with open(failed_path, 'a+', encoding='utf-8') as fail:
                     fail.write("Basenames transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
 
+        logging.info("Basenames process {}-{} transaction_hash record count={}, end_at={}".format(
+            start_time, end_time, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
         cursor.close()
         conn.close()
 
@@ -1025,7 +1058,7 @@ def decode_NewOwner(data, topic0, topic1, topic2, topic3):
     owner = bytes32_to_address(data)
 
     reverse = False
-    if parent_node == BASE_ETH_NODE:
+    if parent_node == BASE_REVERSE_NODE:
         reverse = True
     node = bytes32_to_nodehash(parent_node, label)
     erc721_token_id = bytes32_to_uint256(label)
@@ -1547,7 +1580,7 @@ if __name__ == '__main__':
     print(f"Coin_type: {decoded_data['coin_type']}")
     print(f"New_address: {decoded_data['new_address']}")
 
-    parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("conect.base.eth")
+    parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("sam.base.eth")
     print(f"parent_node: {parent_node}")
     print(f"self_label: {self_label}")
     print(f"self_token_id: {self_token_id}")
