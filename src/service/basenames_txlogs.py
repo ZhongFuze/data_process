@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 18:28:15
+LastEditTime: 2024-08-27 19:50:59
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -632,6 +632,8 @@ class Fetcher():
         '''
         upsert_record = {}
         upsert_data = {}
+        is_primary = False
+        set_name_record = {}
         log_count = 0
         is_registered = False
         transaction_hash = ""
@@ -660,6 +662,12 @@ class Fetcher():
                 upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
                 upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                 upsert_data[reverse_node]["reverse_address"] = decoded["reverse_address"]
+
+                is_primary = True
+                if reverse_node not in set_name_record:
+                    set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                set_name_record[reverse_node]["reverse_node"] = reverse_node
+                set_name_record[reverse_node]["reverse_address"] = reverse_address
 
                 if reverse_node not in upsert_record:
                     upsert_record[reverse_node] = {
@@ -716,6 +724,12 @@ class Fetcher():
                     upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
                     upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                     upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                    is_primary = True
+                    if reverse_node not in set_name_record:
+                        set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                    set_name_record[reverse_node]["reverse_node"] = reverse_node
+                    set_name_record[reverse_node]["reverse_address"] = reverse_address
 
                     if reverse_node not in upsert_record:
                         upsert_record[reverse_node] = {
@@ -922,6 +936,7 @@ class Fetcher():
                     # normal resolved
                     upsert_data[node]["name"] = name
                 else:
+                    # node is reverse_node
                     # reverse resolved
                     if node in upsert_data:
                         if "reverse_address" in upsert_data[node]:
@@ -944,6 +959,12 @@ class Fetcher():
                                 }
                             upsert_record[self_node]["update_record"][log_index] = {
                                 "signature": signature, "upsert_data": copy.deepcopy(upsert_data[self_node])}
+
+                    if node not in set_name_record:
+                        set_name_record[node] = {"reverse_node": node}
+                    set_name_record[node]["reverse_node"] = node
+                    set_name_record[node]["name"] = name
+                    set_name_record[node]["namenode"] = self_node
 
                 if node not in upsert_record:
                     upsert_record[node] = {
@@ -979,7 +1000,14 @@ class Fetcher():
             upsert_record[node]["log_count"] = log_count
             upsert_record[node]["is_registered"] = is_registered
 
-        return block_datetime, upsert_data, upsert_record
+        process_result = {
+            "block_datetime": block_datetime,
+            "upsert_data": upsert_data,
+            "upsert_record": upsert_record,
+            "is_primary": is_primary,
+            "set_name_record": set_name_record,
+        }
+        return process_result
 
     def pipeline(self, start_time, end_time):
         conn = psycopg2.connect(setting.PG_DSN["ens"])
@@ -1001,9 +1029,9 @@ class Fetcher():
         for transaction_hash, group in grouped:
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             try:
-                block_datetime, upsert_data, upsert_record = self.transaction_process(sorted_group)
-                self.save_basenames(upsert_data, cursor)
-                self.save_basenames_update_record(upsert_record, cursor)
+                process_result = self.transaction_process(sorted_group)
+                self.save_basenames(process_result["upsert_data"], cursor)
+                self.save_basenames_update_record(process_result["upsert_record"], cursor)
                 # logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
             except Exception as ex:
                 error_msg = traceback.format_exc()
@@ -1029,6 +1057,39 @@ class Fetcher():
         record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
         record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
         return record_df
+
+    def update_primary_name(self, set_name_record, cursor):
+        for reverse_node, record in set_name_record.items():
+            reverse_address = record.get("reverse_address", "")
+            name = record.get("name", "")
+            namenode = record.get("namenode", "")
+            if reverse_address == "" or namenode == "":
+                continue
+            
+            logging.debug("Basenames set_name[addr={},reverse_node={}] -> name={}, node={}".format(
+                reverse_address, reverse_node, name, namenode))
+
+            # set all record with has reverse_address = {{reverse_address}}
+            # it's is_primary = False
+            # then set particular namenode and reverse_node reverse_address is_primary = True
+            reset_primary_sql = f"""
+                UPDATE basenames SET is_primary = false, reverse_address = null WHERE namenode = '{namenode}'
+            """
+            try:
+                cursor.execute(reset_primary_sql)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during reset primary_name in {}, sql={}".format(error_msg, reset_primary_sql))
+
+            update_primary_sql = f"""
+                UPDATE basenames SET is_primary = true, reverse_address = '{reverse_address}' 
+                WHERE namenode = '{namenode}' OR namenode = '{reverse_node}'
+            """
+            try:
+                cursor.execute(reset_primary_sql)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during update primary_name in {}, sql={}".format(error_msg, update_primary_sql))
 
     def save_basenames(self, upsert_data, cursor):
         for namenode, record in upsert_data.items():
@@ -1310,10 +1371,14 @@ class Fetcher():
         for transaction_hash, group in grouped:
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             try:
-                block_datetime, upsert_data, upsert_record = self.transaction_process(sorted_group)
-                self.save_basenames(upsert_data, cursor)
-                self.save_basenames_update_record(upsert_record, cursor)
-                logging.debug("Basenames process transaction_hash {} Done".format(transaction_hash))
+                process_result = self.transaction_process(sorted_group)
+                block_datetime = process_result["block_datetime"]
+                is_primary = process_result["is_primary"]
+                self.save_basenames(process_result["upsert_data"], cursor)
+                self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                if is_primary:
+                    self.update_primary_name(process_result["set_name_record"], cursor)
+                # logging.debug("Basenames process transaction_hash {} Done".format(transaction_hash))
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 base_ts = time.mktime(time.strptime(block_datetime, "%Y-%m-%d %H:%M:%S"))

@@ -24,6 +24,8 @@ CREATE INDEX basenames_owner_index ON basenames (owner);
 CREATE INDEX basenames_resolved_index ON basenames (resolved_address);
 CREATE INDEX basenames_reverse_index ON basenames (reverse_address);
 
+ALTER TABLE public.basenames ADD COLUMN is_primary BOOLEAN DEFAULT FALSE;
+
 
 CREATE TABLE basenames_record (
     id SERIAL PRIMARY KEY,
