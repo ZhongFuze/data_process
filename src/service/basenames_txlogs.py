@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 20:28:09
+LastEditTime: 2024-08-28 00:45:29
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -667,7 +667,7 @@ class Fetcher():
                 if reverse_node not in set_name_record:
                     set_name_record[reverse_node] = {"reverse_node": reverse_node}
                 set_name_record[reverse_node]["reverse_node"] = reverse_node
-                set_name_record[reverse_node]["reverse_address"] = reverse_address
+                set_name_record[reverse_node]["reverse_address"] = decoded["reverse_address"]
 
                 if reverse_node not in upsert_record:
                     upsert_record[reverse_node] = {
