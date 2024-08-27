@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 18:30:18
+LastEditTime: 2024-08-27 19:55:46
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -64,7 +64,7 @@ def basenames_txlogs_dump_to_db():
 
 def basenames_offline_process():
     start_date = "2024-07-26"
-    end_date = "2024-08-26"
+    end_date = "2024-08-27"
     logging.info("Starting basenames_offline_process job...")
     BasenamesFetcher().offline_process(start_date, end_date)
 
@@ -112,17 +112,17 @@ if __name__ == "__main__":
             id='clusters_name_job'
         )
 
-        basenames_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="*", minute="1,20,40", second="1"
-        )
-        scheduler.add_job(
-            basenames_job,
-            trigger=basenames_trigger,
-            id='basenames_job'
-        )
-        scheduler.start()
+        # basenames_trigger = CronTrigger(
+        #     year="*", month="*", day="*", hour="*", minute="1,20,40", second="1"
+        # )
+        # scheduler.add_job(
+        #     basenames_job,
+        #     trigger=basenames_trigger,
+        #     id='basenames_job'
+        # )
+        # scheduler.start()
 
-        # basenames_offline_process()
+        basenames_offline_process()
         # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_dump_to_db()
         while True:

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 19:50:59
+LastEditTime: 2024-08-27 19:54:23
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -1030,8 +1030,11 @@ class Fetcher():
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
             try:
                 process_result = self.transaction_process(sorted_group)
+                is_primary = process_result["is_primary"]
                 self.save_basenames(process_result["upsert_data"], cursor)
                 self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                if is_primary:
+                    self.update_primary_name(process_result["set_name_record"], cursor)
                 # logging.info("Basenames process transaction_hash {} Done".format(transaction_hash))
             except Exception as ex:
                 error_msg = traceback.format_exc()
