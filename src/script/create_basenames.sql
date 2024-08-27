@@ -23,3 +23,22 @@ CREATE INDEX basenames_index ON basenames (name);
 CREATE INDEX basenames_owner_index ON basenames (owner);
 CREATE INDEX basenames_resolved_index ON basenames (resolved_address);
 CREATE INDEX basenames_reverse_index ON basenames (reverse_address);
+
+
+CREATE TABLE basenames_record (
+    id SERIAL PRIMARY KEY,
+    block_timestamp TIMESTAMP WITHOUT TIME ZONE,
+    namenode VARCHAR(66) NOT NULL,
+    transaction_hash VARCHAR(66) NOT NULL,
+    log_count INT NOT NULL,
+    is_registered BOOLEAN DEFAULT FALSE,
+    update_record TEXT,
+    CONSTRAINT unique_basenames_record UNIQUE (namenode, transaction_hash)
+);
+
+CREATE INDEX timestamp_basenames_record_index ON basenames_record (block_timestamp);
+
+BEGIN;
+TRUNCATE TABLE public.basenames_record;
+ALTER SEQUENCE public.basenames_record_id_seq RESTART WITH 1;
+COMMIT;
