@@ -12,6 +12,7 @@ CREATE TABLE basenames (
     resolver VARCHAR(42),
     resolved_address VARCHAR(42),
     reverse_address VARCHAR(42),
+    is_primary BOOLEAN DEFAULT FALSE,
     contenthash TEXT,
     update_time TIMESTAMP WITHOUT TIME ZONE,
     resolved_records JSONB default '{}'::jsonb,
@@ -23,8 +24,6 @@ CREATE INDEX basenames_index ON basenames (name);
 CREATE INDEX basenames_owner_index ON basenames (owner);
 CREATE INDEX basenames_resolved_index ON basenames (resolved_address);
 CREATE INDEX basenames_reverse_index ON basenames (reverse_address);
-
-ALTER TABLE public.basenames ADD COLUMN is_primary BOOLEAN DEFAULT FALSE;
 
 
 CREATE TABLE basenames_record (

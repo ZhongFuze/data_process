@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 19:55:46
+LastEditTime: 2024-08-27 20:27:27
 FilePath: /data_process/src/data_process.py
 Description: 
 '''

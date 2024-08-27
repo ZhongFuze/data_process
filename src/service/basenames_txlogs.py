@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-27 19:54:23
+LastEditTime: 2024-08-27 20:28:09
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -1068,7 +1068,7 @@ class Fetcher():
             namenode = record.get("namenode", "")
             if reverse_address == "" or namenode == "":
                 continue
-            
+
             logging.debug("Basenames set_name[addr={},reverse_node={}] -> name={}, node={}".format(
                 reverse_address, reverse_node, name, namenode))
 
@@ -1076,7 +1076,7 @@ class Fetcher():
             # it's is_primary = False
             # then set particular namenode and reverse_node reverse_address is_primary = True
             reset_primary_sql = f"""
-                UPDATE basenames SET is_primary = false, reverse_address = null WHERE namenode = '{namenode}'
+                UPDATE basenames SET is_primary = false, reverse_address = null WHERE reverse_address = '{reverse_address}'
             """
             try:
                 cursor.execute(reset_primary_sql)
@@ -1085,11 +1085,10 @@ class Fetcher():
                 raise Exception("Caught exception during reset primary_name in {}, sql={}".format(error_msg, reset_primary_sql))
 
             update_primary_sql = f"""
-                UPDATE basenames SET is_primary = true, reverse_address = '{reverse_address}' 
-                WHERE namenode = '{namenode}' OR namenode = '{reverse_node}'
+                UPDATE basenames SET is_primary = true, reverse_address = '{reverse_address}' WHERE namenode = '{namenode}' OR namenode = '{reverse_node}'
             """
             try:
-                cursor.execute(reset_primary_sql)
+                cursor.execute(update_primary_sql)
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 raise Exception("Caught exception during update primary_name in {}, sql={}".format(error_msg, update_primary_sql))
