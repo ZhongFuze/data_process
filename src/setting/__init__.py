@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-24 22:17:34
+LastEditTime: 2024-08-30 23:21:48
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -26,6 +26,10 @@ Settings = {
 DATACLOUD_SETTINGS = {
     "url": "",
     "api_key": "",
+}
+
+ID_ALLOCATION_SETTINGS = {
+    "url": "",
 }
 
 CHAINBASE_SETTINGS = {
@@ -59,6 +63,7 @@ def load_settings(env="test"):
     @description: load configurations from file
     """
     global Settings
+    global ID_ALLOCATION_SETTINGS
     global DATACLOUD_SETTINGS
     global CHAINBASE_SETTINGS
     global RPC_SETTINGS
@@ -81,6 +86,7 @@ def load_settings(env="test"):
     config = toml.load(config_file)
     Settings["env"] = env
     Settings["datapath"] = os.path.join(config["server"]["work_path"], "data")
+    ID_ALLOCATION_SETTINGS = load_id_allocation_settings(config_file)
     DATACLOUD_SETTINGS = load_datacloud_settings(config_file)
     CHAINBASE_SETTINGS = load_chainbase_settings(config_file)
     CROSSBELL_SETTINGS = load_crossbell_settings(config_file)
@@ -107,6 +113,22 @@ def load_dsn(config_file):
             "ens": config["pg_dsn"]["ens"],
         }
         return pg_dsn_settings
+    except Exception as ex:
+        logging.exception(ex)
+
+
+def load_id_allocation_settings(config_file):
+    """
+    @description: load id_allocation configurations
+    @params: config_file
+    @return id_allocation_settings
+    """
+    try:
+        config = toml.load(config_file)
+        id_allocation_settings = {
+            "url": config["id_allocation"]["url"]
+        }
+        return id_allocation_settings
     except Exception as ex:
         logging.exception(ex)
 

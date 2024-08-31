@@ -6,11 +6,11 @@ services:
     volumes:
       - ./shared_data:/app/data
       - ./app/config:/app/config
-      - ./app/log:/app/log
+      - ./app/log:/tmp
     network_mode: "host"
-  loopup-gno:
+  lookup-gno:
     image: ghcr.io/zhongfuze/lookup-gno:main
-    container_name: loopup_gno
+    container_name: lookup_gno
     network_mode: "host"
   nginx:
     image: nginx
