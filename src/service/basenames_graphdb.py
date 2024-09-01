@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 02:12:57
+LastEditTime: 2024-09-02 03:08:06
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -81,6 +81,7 @@ class BasenamesGraph():
             "vids": vids,
         }
         payload = json.dumps(param)
+        logging.info("id_allocation request: {}".format(payload))
         response = requests.post(url=allocation_url, data=payload, timeout=30)
         if response.status_code != 200:
             logging.warn("id_allocation failed: url={}, {} {}".format(allocation_url, response.status_code, response.reason))
@@ -223,9 +224,9 @@ class BasenamesGraph():
         if owner is not None and reverse_address is None and reverse_address is not None:
             resolved_adress = reverse_address
 
-        # `resolved_adress` is missing, but resolver is L2 Resolver, set `resolved_adress` equal to owner
-        # if owner is not None and resolver is not None and resolved_adress is None:
-        #     resolved_adress = owner
+        # # `resolved_adress` is missing, but resolver is L2 Resolver, set `resolved_adress` equal to owner
+        if owner is not None and resolver is not None and resolved_adress is None:
+            resolved_adress = owner
 
         vertices = []
         edges = []
@@ -254,6 +255,26 @@ class BasenamesGraph():
             "chain": {"value": "base"},
             "symbol": {"value": "Basenames"},
             "updated_at": {"value": updated_at, "op": "max"}
+        }
+
+        ownership = {
+            "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+            "source": {"value": "basenames"},
+            "transaction": {"value": transaction_hash},
+            "id": {"value": base_name, "op": "ignore_if_exists"},
+            "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+            "updated_at": {"value": updated_at, "op": "max"},
+            "fetcher": {"value": "data_service"},
+            "expired_at": {"value": expired_at, "op": "max"},
+        }
+
+        resolve_edge = {
+            "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+            "source": {"value": "basenames"},
+            "system": {"value": "basenames"},
+            "name": {"value": base_name, "op": "ignore_if_exists"},
+            "fetcher": {"value": "data_service"},
+            "updated_at": {"value": updated_at, "op": "max"},
         }
 
         if owner is not None:
@@ -292,9 +313,11 @@ class BasenamesGraph():
                 "reverse": {"value": reverse, "op": "or"}
             }
 
+        # add condition[owner not null and resolved_address is null]
         if owner is not None and resolved_adress is None:
             # Resolve record not existed anymore. Save owner address
-            # owner -(Hold)-> domain
+            # hyper_vertex -> owner
+            # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
             vids = [owner_identity["id"]["value"]]
             allocate_res = self.call_allocation(vids)
             hv_id = allocate_res["return_graph_id"]
@@ -322,22 +345,11 @@ class BasenamesGraph():
                 vertex_type="Contracts",
                 attributes=contract
             ))
-
-            ownership = {
-                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
-                "source": {"value": "basenames"},
-                "transaction": {"value": transaction_hash},
-                "id": {"value": base_name, "op": "ignore_if_exists"},
-                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
-                "updated_at": {"value": updated_at, "op": "max"},
-                "fetcher": {"value": "data_service"},
-                "expired_at": {"value": expired_at, "op": "max"},
-            }
             edges.append(Edge(
                 edge_type="PartOfIdentitiesGraph_Reverse",
                 from_id=hv["id"]["value"],
                 from_type="IdentitiesGraph",
-                to_id=domain_identity["id"]["value"],
+                to_id=owner_identity["id"]["value"],
                 to_type="Identities",
                 attributes={}
             ))
@@ -358,37 +370,88 @@ class BasenamesGraph():
                 attributes=ownership
             ))
 
+        # add condition[owner not null and resolved_address is not null]
         elif owner is not None and resolved_adress is not None:
             if reverse_address is None:
                 # No ClaimReverse
                 if owner == resolved_adress:
-                    # domain will be added to hyper_vertex IdentitiesGraph
-                    # only when resolved_adress == owner
-                    vids = [resolved_adress, domain_identity_id]
-                else:
-                    # owner != resolved_adress
-                    # domain & resolved_adress will be added to hyper_vertex IdentitiesGraph
-                    vids = [resolved_adress, domain_identity_id]
+                    # add condition [and resolved_adress = owner]
+                    # hyper_vertex -> (resolved_adress, domain)
+                    # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
+                    # domain -(Resolve)-> resolved_adress
+                    vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
+                    allocate_res = self.call_allocation(vids)
+                    hv_id = allocate_res["return_graph_id"]
+                    hv = {
+                        "id": {"value": hv_id, "op": "ignore_if_exists"},
+                        "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+                    }
+                    vertices.append(Vertex(vertex_id=hv["id"]["value"], vertex_type="IdentitiesGraph", attributes=hv))
+                    vertices.append(Vertex(vertex_id=resolved_identity["id"]["value"], vertex_type="Identities", attributes=resolved_identity))
+                    vertices.append(Vertex(vertex_id=domain_identity["id"]["value"], vertex_type="Identities", attributes=domain_identity))
+                    vertices.append(Vertex(vertex_id=contract["id"]["value"], vertex_type="Contracts", attributes=contract))
 
-                    # owner -(Hold)-> domain
-                    owner_vids = [owner]
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="Hold_Identity",
+                        from_id=resolved_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=ownership
+                    ))
+                    edges.append(Edge(
+                        edge_type="Hold_Contract",
+                        from_id=resolved_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=contract["id"]["value"],
+                        to_type="Contracts",
+                        attributes=ownership
+                    ))
+                    edges.append(Edge(
+                        edge_type="Resolve",
+                        from_id=domain_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=resolve_edge
+                    ))
+
+                else:
+                    # add condition [and resolved_adress != owner]
+                    # domain & resolved_adress will be added to hyper_vertex IdentitiesGraph
+                    # hyper_vertex -> (resolved_adress, domain)
+                    # domain -(Resolve)-> resolved_adress
+                    # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
+
+                    # NOTICE: In mint action, there is no case where owner != resolution
+                    # resolved_address is usually changed by AddrChanged later
+                    pass
             else:
                 # reverse_address is not None ## Has ClaimReverse Records
                 if owner == resolved_adress and resolved_adress == reverse_address:
+                    # add condition [owner = resolved_adress and resolved_adress = reverse_address]
+                    # hyper_vertex -> (owner, domain)
+                    # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
+                    # domain -(Resolve)-> resolved_adress
+                    # reverse_address -(Resolve)-> domain
                     vids = [resolved_adress, domain_identity_id]
-                elif owner == resolved_adress and resolved_adress != reverse_address:
-                    vids = [resolved_adress, domain_identity_id]
-                    # reverse_address -(Reverse_Resolve)-> domain
-                    reverse_vids = [reverse_address]
-                elif owner == reverse_address and owner != resolved_adress:
-                    vids = [resolved_adress, domain_identity_id]
-                    # owner -(Hold)-> domain, reverse_address -(Reverse_Resolve)-> domain
-                    owner_vids = [owner]
-                elif resolved_adress == reverse_address and owner != resolved_adress:
-                    vids = [resolved_adress, domain_identity_id]
-                    # owner -(Hold)-> domain
-                    # reverse_address -(Reverse_Resolve)-> domain
-                    owner_vids = [owner]
+
 
         self.upsert_graph(vertices, edges)
 
@@ -474,10 +537,8 @@ if __name__ == "__main__":
     }
 
     print(json.dumps(processed_data))
-
     BasenamesGraph().save_tigergraph(processed_data)
 
-    exit(1)
     # Example usage
     nanoseconds = get_unix_milliconds()
     print(nanoseconds)
