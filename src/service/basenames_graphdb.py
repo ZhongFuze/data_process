@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 03:24:51
+LastEditTime: 2024-09-02 07:02:26
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -26,6 +26,8 @@ import traceback
 import subprocess
 import pandas as pd
 
+from datetime import datetime
+
 import setting
 
 def get_unix_milliconds():
@@ -34,6 +36,17 @@ def get_unix_milliconds():
     # Convert to milliconds by multiplying by 1e6 and converting to an integer
     milliconds = int(current_time_seconds * 1e6)
     return milliconds
+
+def dict_factory(cursor, row):
+    """
+    Convert query result to a dictionary.
+    """
+    col_names = [col_desc[0] for col_desc in cursor.description]
+    row_dict = dict(zip(col_names, row))
+    for key, value in row_dict.items():
+        if isinstance(value, datetime):
+            row_dict[key] = int(value.timestamp())
+    return row_dict
 
 class Vertex:
     '''Vertex'''
@@ -97,6 +110,68 @@ class BasenamesGraph():
             return res["data"]
         return None
 
+    def delete_edge_by_source_target(self, source_vertex_type, source_vertex_id, edge_type, target_vertex_type, target_vertex_id, discriminator=None):
+        '''
+        description: delete_an_edge_by_source_target_edge_type_and_discriminator
+        # curl -X DELETE "https://crunch.i.tgcloud.io:14240/restpp/graph/CrunchBasePre_2013/edges/person/p:23601/work_for_company/company/c:14478"
+        # DELETE /restpp/graph/{graph_name}/edges/{source_vertex_type}/{source_vertex_id}/{edge_type}/{target_vertex_type}/{target_vertex_id}
+        # DELETE /restpp/graph/SocialGraph/edges/Identities/ethereum,{old_owner}/Hold_Identity/Identities/basenames,{name}/
+        
+        # DELETE /restpp/graph/{graph_name}/edges/{source_vertex_type}/{source_vertex_id}/{edge_type}/{target_vertex_type}/{target_vertex_id}/{discriminator}
+        # DELETE /Identities/ethereum,{old_owner}/Hold_Contract/Contracts/base,0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5/basenames::{name}
+        '''
+        if discriminator is None:
+            delete_url = "{}:{}/restpp/graph/{}/edges/{}/{}/{}/{}/{}".format(
+                setting.TIGERGRAPH_SETTINGS["host"],
+                setting.TIGERGRAPH_SETTINGS["restpp"],
+                setting.TIGERGRAPH_SETTINGS["social_graph_name"],
+                source_vertex_type,
+                source_vertex_id,
+                edge_type,
+                target_vertex_type,
+                target_vertex_id
+            )
+            # logging.debug("delete_url: {}".format(delete_url))
+            response = requests.delete(url=delete_url, timeout=60)
+            if response.status_code != 200:
+                error_msg = "tigergraph delete failed: url={}, {} {}".format(delete_url, response.status_code, response.reason)
+                logging.error(error_msg)
+
+            raw_text = response.text
+            res = json.loads(raw_text)
+            if "error" in res:
+                if res["error"] is True:
+                    error_msg = "tigergraph delete failed: url={}, error={}".format(delete_url, res)
+                    logging.error(error_msg)
+
+            logging.debug("tigergraph delete res: {}".format(res))
+        else:
+            delete_url = "{}:{}/restpp/graph/{}/edges/{}/{}/{}/{}/{}/{}".format(
+                setting.TIGERGRAPH_SETTINGS["host"],
+                setting.TIGERGRAPH_SETTINGS["restpp"],
+                setting.TIGERGRAPH_SETTINGS["social_graph_name"],
+                source_vertex_type,
+                source_vertex_id,
+                edge_type,
+                target_vertex_type,
+                target_vertex_id,
+                discriminator
+            )
+            # logging.debug("delete_url: {}".format(delete_url))
+            response = requests.delete(url=delete_url, timeout=60)
+            if response.status_code != 200:
+                error_msg = "tigergraph delete failed: url={}, {} {}".format(delete_url, response.status_code, response.reason)
+                logging.error(error_msg)
+
+            raw_text = response.text
+            res = json.loads(raw_text)
+            if "error" in res:
+                if res["error"] is True:
+                    error_msg = "tigergraph delete failed: url={}, error={}".format(delete_url, res)
+                    logging.error(error_msg)
+
+            logging.debug("tigergraph delete res: {}".format(res))
+
     def upsert_graph(self, vertices, edges):
         '''
         description:
@@ -156,8 +231,9 @@ class BasenamesGraph():
             graph_req["edges"][e.from_type][e.from_id][e.edge_type][e.to_type][e.to_id] = e.attributes
 
         payload = json.dumps(graph_req)
-        upsert_url = "{}/graph/{}?vertex_must_exist=true".format(
-            setting.TIGERGRAPH_SETTINGS["host"], setting.TIGERGRAPH_SETTINGS["social_graph_name"])
+        logging.debug(payload)
+        upsert_url = "{}:{}/graph/{}?vertex_must_exist=true".format(
+            setting.TIGERGRAPH_SETTINGS["host"], setting.TIGERGRAPH_SETTINGS["inner_port"], setting.TIGERGRAPH_SETTINGS["social_graph_name"])
         response = requests.post(url=upsert_url, data=payload, timeout=60)
         if response.status_code != 200:
             error_msg = "tigergraph upsert failed: url={}, {} {}".format(upsert_url, response.status_code, response.reason)
@@ -174,7 +250,34 @@ class BasenamesGraph():
 
         logging.debug("tigergraph upsert res: {}".format(res))
 
-    def mint(self, block_datetime, transaction_hash, upsert_data):
+    def get_whole_record(self, namenode):
+        try:
+            this_conn = psycopg2.connect(setting.PG_DSN["ens"])
+            this_conn.autocommit = True
+            this_cursor = this_conn.cursor()
+
+            sql_query = """
+                SELECT namenode,name,owner,resolved_address,reverse_address,is_primary,resolved_records,expire_time
+                FROM public.basenames 
+                WHERE namenode = '{}'
+            """
+            sql = sql_query.format(namenode)
+            this_cursor.execute(sql)
+            result = this_cursor.fetchone()
+            if result:
+                whold_record = dict_factory(this_cursor, result)
+                return whold_record
+            else:
+                logging.info("Basenames namenode={} not exist".format(namenode))
+                return None
+        except Exception as ex:
+            error_msg = traceback.format_exc()
+            raise Exception("Caught exception during query in {}, sql={}".format(error_msg, sql))
+        finally:
+            this_cursor.close()
+            this_conn.close()
+
+    def mint(self, block_datetime, upsert_data):
         base_name = None
         owner = None
         resolver = None
@@ -257,10 +360,13 @@ class BasenamesGraph():
             "updated_at": {"value": updated_at, "op": "max"}
         }
 
+        # DISCRIMINATOR(source STRING)
+        # DISCRIMINATOR(source STRING, transaction STRING, id STRING)
+        # Do not save transaction for registration(it's hard to delete and update with DISCRIMINATOR)
         ownership = {
             "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
             "source": {"value": "basenames"},
-            "transaction": {"value": transaction_hash},
+            "transaction": {"value": ""},
             "id": {"value": base_name, "op": "ignore_if_exists"},
             "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
             "updated_at": {"value": updated_at, "op": "max"},
@@ -515,11 +621,110 @@ class BasenamesGraph():
 
         self.upsert_graph(vertices, edges)
 
-    def burn(self, upsert_data):
-        pass
+    def change_owner(self, block_datetime, upsert_data):
+        for namenode, record in upsert_data.items():
+            new_owner = record.get("owner", None)
+            if new_owner is None:
+                continue
 
-    def change_owner(self, upsert_data):
-        pass
+            # query namenode for whole record
+            # need to get owner record for this change
+            whole_record = self.get_whole_record(namenode)
+            if whole_record is None:
+                continue
+            old_owner = whole_record.get("owner", None)
+            base_name = whole_record.get("name", None)
+            expire_time = whole_record.get("expire_time", None)
+
+            if base_name is None:
+                continue
+            if not base_name.endswith("base.eth"):
+                continue
+
+            new_owner_id = "ethereum,{}".format(new_owner)
+            basenames_contract_id = "base,0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5"
+            domain_id = "basenames,{}".format(base_name)
+            hold_discriminator = "basenames,,{}".format(base_name) # source:tx:name
+
+            updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+            expired_at = "1970-01-01 00:00:00"
+            if expire_time is not None:
+                if expire_time > 0:
+                    expired_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expire_time))
+            
+            # delete old owner -(Hold)-> domain
+            if old_owner is not None:
+                old_owner_id = "ethereum,{}".format(old_owner)
+                # burn nft or change owne
+                self.delete_edge_by_source_target(
+                    source_vertex_type="Identities",
+                    source_vertex_id=old_owner_id,
+                    edge_type="Hold_Identity",
+                    target_vertex_type="Identities",
+                    target_vertex_id=domain_id,
+                    discriminator="basenames"
+                )
+                self.delete_edge_by_source_target(
+                    source_vertex_type="Identities",
+                    source_vertex_id=old_owner_id,
+                    edge_type="Hold_Contract",
+                    target_vertex_type="Contracts",
+                    target_vertex_id=basenames_contract_id,
+                    discriminator=hold_discriminator
+                )
+
+            if new_owner is not None and new_owner == "0x000000000000000000000000000000000000":
+                # if burn name, do not create new ownership
+                new_owner = None
+                continue
+
+            # else: need add new_owner
+            vertices = []
+            edges = []
+
+            # There must be a new owner (to prevent it from not existing in graphdb)
+            owner_identity = {
+                "id": {"value": new_owner_id, "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "ethereum", "op": "ignore_if_exists"},
+                "identity": {"value": new_owner, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+            }
+
+            ownership = {
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "source": {"value": "basenames"},
+                "transaction": {"value": ""},
+                "id": {"value": base_name, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "fetcher": {"value": "data_service"},
+                "expired_at": {"value": expired_at, "op": "max"},
+            }
+            vertices.append(Vertex(
+                vertex_id=owner_identity["id"]["value"],
+                vertex_type="Identities",
+                attributes=owner_identity
+            ))
+            edges.append(Edge(
+                edge_type="Hold_Identity",
+                from_id=owner_identity["id"]["value"],
+                from_type="Identities",
+                to_id=domain_id,
+                to_type="Identities",
+                attributes=ownership
+            ))
+            edges.append(Edge(
+                edge_type="Hold_Contract",
+                from_id=owner_identity["id"]["value"],
+                from_type="Identities",
+                to_id=basenames_contract_id,
+                to_type="Contracts",
+                attributes=ownership
+            ))
+            self.upsert_graph(vertices, edges)
 
     def change_resolved_address(self, upsert_data):
         pass
@@ -553,15 +758,15 @@ class BasenamesGraph():
 
         logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
         if is_registered:
-            self.mint(block_datetime, transaction_hash, upsert_data)
+            self.mint(block_datetime, upsert_data)
         else:
             # if not register tx but changed owner/resolved_address/reverse_address
             if is_change_owner:
-                self.change_owner(upsert_data)
-            
+                self.change_owner(block_datetime, upsert_data)
+
             if is_change_resolved:
                 self.change_resolved_address(upsert_data)
-            
+
             if is_primary:
                 self.change_resolved_address(set_name_record)
 
@@ -622,11 +827,62 @@ if __name__ == "__main__":
         "set_name_record": {},
     }
 
-    print(json.dumps(processed_data_mint_1))
-    BasenamesGraph().save_tigergraph(processed_data_mint_1)
+    processed_data_mint_before_transfer = {
+        "block_datetime": "2024-09-01 13:17:35",
+        "transaction_hash": "0xbfb10cbd6c2a633d3942b8ab491112048db03916c35f0bd222635e1a578c2cb3",
+        "upsert_data": {
+            "0x6cb23df366fa6d0812363e7702dca20f3395b4f59acd4920343466a4728ce381": {
+                "namenode": "0x6cb23df366fa6d0812363e7702dca20f3395b4f59acd4920343466a4728ce381",
+                "label": "0xc165357841bc4e8fbb028d21967d5181b9e1d476e802a670ebe5b3e23535132a",
+                "erc721_token_id": "87475200364785773647325770570931606914906483396244625186245942351984361542442",
+                "owner": "0x4b23773022b88399bc91fc1f576f223a82d54167",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2025-09-01 19:17:35",
+                "registration_time": "2024-09-01 13:17:35",
+                "resolved_records": {
+                    "60": "0x4b23773022b88399bc91fc1f576f223a82d54167"
+                },
+                "resolved_address": "0x4b23773022b88399bc91fc1f576f223a82d54167",
+                "name": "hghikglkghkj.base.eth",
+                "reverse_address": "0x4b23773022b88399bc91fc1f576f223a82d54167"
+            },
+        },
+        "is_primary": True,
+        "is_change_owner": True,
+        "is_change_resolved": True,
+        "is_registered": True,
+        "set_name_record": {},
+    }
 
-    # Example usage
-    nanoseconds = get_unix_milliconds()
-    print(nanoseconds)
-    # 1716471514174958
-    # 1725030920488860
+    processed_data_transfer = {
+        "block_datetime": "2024-09-01 19:56:39",
+        "transaction_hash": "0xa47b6083e0707e95605be9017851cd5fd6cf0d69cd09395bd4ea911fc2198f2a",
+        "upsert_data": {
+            "0x6cb23df366fa6d0812363e7702dca20f3395b4f59acd4920343466a4728ce381": {
+                "namenode": "0x6cb23df366fa6d0812363e7702dca20f3395b4f59acd4920343466a4728ce381",
+                "label": "0xc165357841bc4e8fbb028d21967d5181b9e1d476e802a670ebe5b3e23535132a",
+                "erc721_token_id": "87475200364785773647325770570931606914906483396244625186245942351984361542442",
+                "owner": "0xfab2ff1163ce0d5bfaddb43ca7ba8a08e17318f9"
+            },
+        },
+        "is_primary": False,
+        "is_change_owner": True,
+        "is_change_resolved": False,
+        "is_registered": False,
+        "set_name_record": {},
+    }
+
+    print(json.dumps(processed_data_transfer))
+    BasenamesGraph().save_tigergraph(processed_data_transfer)
+
+    # # Example usage
+    # namenode = "0xfbaa2c1b3eb73f61d64532221cf51fc5cef0999a85793515f3cb1a99f8ca0239"
+    # _record = BasenamesGraph().get_whole_record(namenode)
+    # print(_record)
+
+    # # Example usage
+    # nanoseconds = get_unix_milliconds()
+    # print(nanoseconds)
+    # # 1716471514174958
+    # # 1725030920488860
