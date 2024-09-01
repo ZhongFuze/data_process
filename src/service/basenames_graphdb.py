@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 07:02:26
+LastEditTime: 2024-09-02 07:19:55
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -231,7 +231,7 @@ class BasenamesGraph():
             graph_req["edges"][e.from_type][e.from_id][e.edge_type][e.to_type][e.to_id] = e.attributes
 
         payload = json.dumps(graph_req)
-        logging.debug(payload)
+        # logging.debug(payload)
         upsert_url = "{}:{}/graph/{}?vertex_must_exist=true".format(
             setting.TIGERGRAPH_SETTINGS["host"], setting.TIGERGRAPH_SETTINGS["inner_port"], setting.TIGERGRAPH_SETTINGS["social_graph_name"])
         response = requests.post(url=upsert_url, data=payload, timeout=60)
@@ -619,6 +619,87 @@ class BasenamesGraph():
                         attributes=resolve_edge
                     ))
 
+                elif owner == resolved_adress and resolved_adress != reverse_address:
+                    vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
+                    allocate_res = self.call_allocation(vids)
+                    hv_id = allocate_res["return_graph_id"]
+                    hv = {
+                        "id": {"value": hv_id, "op": "ignore_if_exists"},
+                        "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+                    }
+                    vertices.append(Vertex(vertex_id=hv["id"]["value"], vertex_type="IdentitiesGraph", attributes=hv))
+                    vertices.append(Vertex(vertex_id=resolved_identity["id"]["value"], vertex_type="Identities", attributes=resolved_identity))
+                    vertices.append(Vertex(vertex_id=domain_identity["id"]["value"], vertex_type="Identities", attributes=domain_identity))
+                    vertices.append(Vertex(vertex_id=contract["id"]["value"], vertex_type="Contracts", attributes=contract))
+
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="Hold_Identity",
+                        from_id=owner_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=ownership
+                    ))
+                    edges.append(Edge(
+                        edge_type="Hold_Contract",
+                        from_id=owner_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=contract["id"]["value"],
+                        to_type="Contracts",
+                        attributes=ownership
+                    ))
+                    edges.append(Edge(
+                        edge_type="Resolve",
+                        from_id=domain_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=resolve_edge
+                    ))
+
+                    # add another hyper_vertex for reverse_address
+                    reverse_vids = [reverse_identity["id"]["value"]]
+                    reverse_allocate_res = self.call_allocation(reverse_vids)
+                    reverse_hv_id = reverse_allocate_res["return_graph_id"]
+                    reverse_hv = {
+                        "id": {"value": reverse_hv_id, "op": "ignore_if_exists"},
+                        "updated_nanosecond": {"value": reverse_allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+                    }
+                    vertices.append(Vertex(vertex_id=reverse_hv["id"]["value"], vertex_type="IdentitiesGraph", attributes=reverse_hv))
+                    vertices.append(Vertex(vertex_id=reverse_identity["id"]["value"], vertex_type="Identities", attributes=reverse_identity))
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=reverse_hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=reverse_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="Reverse_Resolve",
+                        from_id=reverse_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=resolve_edge
+                    ))
+
         self.upsert_graph(vertices, edges)
 
     def change_owner(self, block_datetime, upsert_data):
@@ -827,6 +908,34 @@ if __name__ == "__main__":
         "set_name_record": {},
     }
 
+    processed_data_mint_3 = {
+        "block_datetime": "2024-08-30 09:18:51",
+        "transaction_hash": "0xd450f68de6876f2a4e81b8faf02f94e6b18d44ed1f82f632d9369dea34614707",
+        "upsert_data": {
+            "0x2c089d0a27b5882dccd570c287de5f296c7d584b960f1c649f9bb8cf54cc330c": {
+                "namenode": "0x2c089d0a27b5882dccd570c287de5f296c7d584b960f1c649f9bb8cf54cc330c",
+                "label": "0xa355ac9eba92b4dbba82cb4c150a0d492b38f7ae4fde5b5e513c79aacb8405d0",
+                "erc721_token_id": "73878367699270243154439286466642188467271746747294840027852101615884309890512",
+                "owner": "0x4c2c5e8439b52b11c891b900c18b9409d9a050ca",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2025-08-30 15:18:51",
+                "registration_time": "2024-08-30 09:18:51",
+                "resolved_records": {
+                    "60": "0x4c2c5e8439b52b11c891b900c18b9409d9a050ca"
+                },
+                "resolved_address": "0x4c2c5e8439b52b11c891b900c18b9409d9a050ca",
+                "name": "brightlight.base.eth",
+                "reverse_address": "0xc5f297fb6c1c0942c7861e381b2720afbec17695"
+            },
+        },
+        "is_primary": True,
+        "is_change_owner": True,
+        "is_change_resolved": True,
+        "is_registered": True,
+        "set_name_record": {},
+    }
+
     processed_data_mint_before_transfer = {
         "block_datetime": "2024-09-01 13:17:35",
         "transaction_hash": "0xbfb10cbd6c2a633d3942b8ab491112048db03916c35f0bd222635e1a578c2cb3",
@@ -873,8 +982,10 @@ if __name__ == "__main__":
         "set_name_record": {},
     }
 
-    print(json.dumps(processed_data_transfer))
-    BasenamesGraph().save_tigergraph(processed_data_transfer)
+
+
+    print(json.dumps(processed_data_mint_3))
+    BasenamesGraph().save_tigergraph(processed_data_mint_3)
 
     # # Example usage
     # namenode = "0xfbaa2c1b3eb73f61d64532221cf51fc5cef0999a85793515f3cb1a99f8ca0239"
