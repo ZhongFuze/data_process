@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 03:08:06
+LastEditTime: 2024-09-02 03:24:51
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -81,7 +81,7 @@ class BasenamesGraph():
             "vids": vids,
         }
         payload = json.dumps(param)
-        logging.info("id_allocation request: {}".format(payload))
+        logging.info("id_allocation vids: {}".format(vids))
         response = requests.post(url=allocation_url, data=payload, timeout=30)
         if response.status_code != 200:
             logging.warn("id_allocation failed: url={}, {} {}".format(allocation_url, response.status_code, response.reason))
@@ -409,7 +409,7 @@ class BasenamesGraph():
                     ))
                     edges.append(Edge(
                         edge_type="Hold_Identity",
-                        from_id=resolved_identity["id"]["value"],
+                        from_id=owner_identity["id"]["value"],
                         from_type="Identities",
                         to_id=domain_identity["id"]["value"],
                         to_type="Identities",
@@ -417,7 +417,7 @@ class BasenamesGraph():
                     ))
                     edges.append(Edge(
                         edge_type="Hold_Contract",
-                        from_id=resolved_identity["id"]["value"],
+                        from_id=owner_identity["id"]["value"],
                         from_type="Identities",
                         to_id=contract["id"]["value"],
                         to_type="Contracts",
@@ -450,11 +450,70 @@ class BasenamesGraph():
                     # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
                     # domain -(Resolve)-> resolved_adress
                     # reverse_address -(Resolve)-> domain
-                    vids = [resolved_adress, domain_identity_id]
+                    vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
+                    allocate_res = self.call_allocation(vids)
+                    hv_id = allocate_res["return_graph_id"]
+                    hv = {
+                        "id": {"value": hv_id, "op": "ignore_if_exists"},
+                        "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+                    }
+                    vertices.append(Vertex(vertex_id=hv["id"]["value"], vertex_type="IdentitiesGraph", attributes=hv))
+                    vertices.append(Vertex(vertex_id=resolved_identity["id"]["value"], vertex_type="Identities", attributes=resolved_identity))
+                    vertices.append(Vertex(vertex_id=domain_identity["id"]["value"], vertex_type="Identities", attributes=domain_identity))
+                    vertices.append(Vertex(vertex_id=contract["id"]["value"], vertex_type="Contracts", attributes=contract))
 
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+                    edges.append(Edge(
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        from_id=hv["id"]["value"],
+                        from_type="IdentitiesGraph",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes={}
+                    ))
+
+                    edges.append(Edge(
+                        edge_type="Hold_Identity",
+                        from_id=owner_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=ownership
+                    ))
+                    edges.append(Edge(
+                        edge_type="Hold_Contract",
+                        from_id=owner_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=contract["id"]["value"],
+                        to_type="Contracts",
+                        attributes=ownership
+                    ))
+
+                    edges.append(Edge(
+                        edge_type="Resolve",
+                        from_id=domain_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=resolved_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=resolve_edge
+                    ))
+                    edges.append(Edge(
+                        edge_type="Reverse_Resolve",
+                        from_id=resolved_identity["id"]["value"],
+                        from_type="Identities",
+                        to_id=domain_identity["id"]["value"],
+                        to_type="Identities",
+                        attributes=resolve_edge
+                    ))
 
         self.upsert_graph(vertices, edges)
-
 
     def burn(self, upsert_data):
         pass
@@ -511,23 +570,22 @@ if __name__ == "__main__":
     import setting.filelogger as logger
     config = setting.load_settings(env="development")
     logger.InitLogger(config)
-    upsert_data = {
-        "namenode": "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433",
-        "label": "0x8304cacded7fef52f9888c1733b295237821952ab20030c9b6f116abd04bb17f",
-        "erc721_token_id": "59261450257229771348166480503003851733994962416400902564228917130619647668607",
-        "owner": "0x94a7677478caa3e401af6f99e783e7ce913428ce",
-        "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
-        "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
-        "expire_time": "2025-08-24 01:31:03",
-        "registration_time": "2024-08-23 19:31:03",
-        "name": "dashiell.base.eth"
-    }
 
-    processed_data = {
+    processed_data_mint_1 = {
         "block_datetime": "2024-08-21 15:17:59",
         "transaction_hash": "0x27a652d95dcbe52cd3cb025414ca13d5c5c940dae10c8e10eb6d1ff900cdadfb",
         "upsert_data": {
-            "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433": upsert_data,
+            "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433": {
+                "namenode": "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433",
+                "label": "0x8304cacded7fef52f9888c1733b295237821952ab20030c9b6f116abd04bb17f",
+                "erc721_token_id": "59261450257229771348166480503003851733994962416400902564228917130619647668607",
+                "owner": "0x94a7677478caa3e401af6f99e783e7ce913428ce",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2025-08-24 01:31:03",
+                "registration_time": "2024-08-23 19:31:03",
+                "name": "dashiell.base.eth"
+            },
         },
         "is_primary": False,
         "is_change_owner": True,
@@ -536,8 +594,36 @@ if __name__ == "__main__":
         "set_name_record": {},
     }
 
-    print(json.dumps(processed_data))
-    BasenamesGraph().save_tigergraph(processed_data)
+    processed_data_mint_1 = {
+        "block_datetime": "2024-09-01 17:30:47",
+        "transaction_hash": "0x62cdb6184f52a3b8a6de887610fd6b9d88adc3110698d69eca4dc1a9c1599b16",
+        "upsert_data": {
+            "0x9fc89fee5ec6e261d6884dd86ae767f5a251384da643ecfa7c97ad4bf7c74c23": {
+                "namenode": "0x9fc89fee5ec6e261d6884dd86ae767f5a251384da643ecfa7c97ad4bf7c74c23",
+                "label": "0x72012ffadc993971344eee60660855d31034bb2e7669b98f32d6eff21adcc60f",
+                "erc721_token_id": "51565762730853849625510228118276961686762200247696377615960387194016027690511",
+                "owner": "0x6498f6cc59f64d01b841b2619f7692cfcdfdaa81",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2026-09-02 05:30:47",
+                "registration_time": "2024-09-01 17:30:47",
+                "resolved_records": {
+                    "60": "0x6498f6cc59f64d01b841b2619f7692cfcdfdaa81"
+                },
+                "resolved_address": "0x6498f6cc59f64d01b841b2619f7692cfcdfdaa81",
+                "name": "gilou.base.eth",
+                "reverse_address": "0x6498f6cc59f64d01b841b2619f7692cfcdfdaa81"
+            },
+        },
+        "is_primary": True,
+        "is_change_owner": True,
+        "is_change_resolved": True,
+        "is_registered": True,
+        "set_name_record": {},
+    }
+
+    print(json.dumps(processed_data_mint_1))
+    BasenamesGraph().save_tigergraph(processed_data_mint_1)
 
     # Example usage
     nanoseconds = get_unix_milliconds()
