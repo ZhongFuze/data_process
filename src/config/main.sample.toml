@@ -19,6 +19,13 @@ ens = "postgresql://postgres:password@host/dbname"
 [id_allocation]
 url = "http://id_allocation_hostname"
 
+[tdb]
+host = "http://tigergraph_hostname"
+username = "tigergraph"
+password = "tigergraph"
+social_graph_name = "graph_name"
+social_graph_token = "01234567abcdefgh01234567abcdefgh"
+
 [datacloud_api]
 url = "https://api.chainbase.online/v1/dw/query"
 api_key = "123456abcdefgh6789abcdefgh"

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-30 23:21:48
+LastEditTime: 2024-09-02 01:56:16
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -50,6 +50,14 @@ PG_DSN = {
     "keybase": "",
 }
 
+TIGERGRAPH_SETTINGS = {
+    "host": "",
+    "username": "",
+    "password": "",
+    "social_graph_name": "",
+    "social_graph_token": "",
+}
+
 WARPCAST_SETTINGS = {
     "token": "",
 }
@@ -71,13 +79,14 @@ def load_settings(env="test"):
     global WARPCAST_SETTINGS
     global GNOSIS_SETTINGS
     global PG_DSN
+    global TIGERGRAPH_SETTINGS
 
     config_file = "/app/config/production.toml"
     if env == "testing":
         config_file = "/app/config/testing.toml"
     elif env == "development":
-        config_file = "./config/development.toml"
-        # config_file = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src/config/development.toml"
+        # config_file = "./config/development.toml"
+        config_file = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/src/config/development.toml"
     elif env == "production":
         config_file = "/app/config/production.toml"
     else:
@@ -94,7 +103,27 @@ def load_settings(env="test"):
     GNOSIS_SETTINGS = load_gnosis_settings(config_file)
     RPC_SETTINGS = load_rpc_settings(config_file)
     PG_DSN = load_dsn(config_file)
+    TIGERGRAPH_SETTINGS = load_tdb(config_file)
     return config
+
+def load_tdb(config_file):
+    """
+    @description: load tdb configuration
+    @params: config_file
+    @return tdb_settings
+    """
+    try:
+        config = toml.load(config_file)
+        tdb_settings = {
+            "host": config["tdb"]["host"],
+            "username": config["tdb"]["username"],
+            "password": config["tdb"]["password"],
+            "social_graph_name": config["tdb"]["social_graph_name"],
+            "social_graph_token": config["tdb"]["social_graph_token"],
+        }
+        return tdb_settings
+    except Exception as ex:
+        logging.exception(ex)
 
 
 def load_dsn(config_file):
