@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-31 23:35:28
+LastEditTime: 2024-09-02 02:12:57
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -36,13 +36,16 @@ def get_unix_milliconds():
     return milliconds
 
 class Vertex:
-    def __init__(self, primary_id, vertex_type, attributes):
-        self.primary_id = primary_id
+    '''Vertex'''
+    def __init__(self, vertex_id, vertex_type, attributes):
+        self.vertex_id = vertex_id
         self.vertex_type = vertex_type
         self.attributes = attributes
 
 class Edge:
-    def __init__(self, from_id, from_type, to_id, to_type, attributes):
+    '''Edge'''
+    def __init__(self, edge_type, from_id, from_type, to_id, to_type, attributes):
+        self.edge_type = edge_type
         self.from_id = from_id
         self.from_type = from_type
         self.to_id = to_id
@@ -69,7 +72,7 @@ class BasenamesGraph():
             "return_updated_nanosecond": "int64",
         }
         '''
-        allocation_url = setting.ID_ALLOCATION_SETTINGS["url"]
+        allocation_url = "{}/id_allocation/allocation".format(setting.ID_ALLOCATION_SETTINGS["url"])
         uuid_v4_str = str(uuid.uuid4())
         update_unix = get_unix_milliconds()
         param = {
@@ -84,10 +87,15 @@ class BasenamesGraph():
             return None
         raw_text = response.text
         res = json.loads(raw_text)
-        # final_graph_id = res["return_graph_id"]
-        # final_updated_nanosecond = res["return_updated_nanosecond"]
-        return res
-    
+        if "code" in res:
+            if res["code"] != 0:
+                logging.warn("id_allocation failed: url={}, code={} err={}".format(allocation_url, res["code"], res["msg"]))
+                return None
+            # final_graph_id = res["return_graph_id"]
+            # final_updated_nanosecond = res["return_updated_nanosecond"]
+            return res["data"]
+        return None
+
     def upsert_graph(self, vertices, edges):
         '''
         description:
@@ -121,14 +129,55 @@ class BasenamesGraph():
         }
         return {*}
         '''
-        pass
+        graph_req = {}
+        if len(vertices) > 0:
+            graph_req["vertices"] = {}
+        for v in vertices:
+            vertex_type = v.vertex_type
+            vertex_id = v.vertex_id
+            if vertex_type not in graph_req["vertices"]:
+                graph_req["vertices"][vertex_type] = {}
+            graph_req["vertices"][vertex_type][vertex_id] = v.attributes
 
-    def mint(self, upsert_data):
-        platform = "basenames"
+        if len(edges) > 0:
+            graph_req["edges"] = {}
+
+        for e in edges:
+            if e.from_type not in graph_req["edges"]:
+                graph_req["edges"][e.from_type] = {}
+            if e.from_id not in graph_req["edges"][e.from_type]:
+                graph_req["edges"][e.from_type][e.from_id] = {}
+            if e.edge_type not in graph_req["edges"][e.from_type][e.from_id]:
+                graph_req["edges"][e.from_type][e.from_id][e.edge_type] = {}
+            if e.to_type not in graph_req["edges"][e.from_type][e.from_id][e.edge_type]:
+                graph_req["edges"][e.from_type][e.from_id][e.edge_type][e.to_type] = {}
+            
+            graph_req["edges"][e.from_type][e.from_id][e.edge_type][e.to_type][e.to_id] = e.attributes
+
+        payload = json.dumps(graph_req)
+        upsert_url = "{}/graph/{}?vertex_must_exist=true".format(
+            setting.TIGERGRAPH_SETTINGS["host"], setting.TIGERGRAPH_SETTINGS["social_graph_name"])
+        response = requests.post(url=upsert_url, data=payload, timeout=60)
+        if response.status_code != 200:
+            error_msg = "tigergraph upsert failed: url={}, {} {}".format(upsert_url, response.status_code, response.reason)
+            logging.error(error_msg)
+            raise Exception(error_msg)
+
+        raw_text = response.text
+        res = json.loads(raw_text)
+        if "error" in res:
+            if res["error"] is True:
+                error_msg = "tigergraph upsert failed: url={}, error={}".format(upsert_url, res)
+                logging.warn(error_msg)
+                raise Exception(error_msg)
+
+        logging.debug("tigergraph upsert res: {}".format(res))
+
+    def mint(self, block_datetime, transaction_hash, upsert_data):
         base_name = None
         owner = None
+        resolver = None
         resolved_adress = None
-
         reverse_address = None
         reverse_name = None
         reverse = False
@@ -139,14 +188,18 @@ class BasenamesGraph():
             if _name is not None and _name != "":
                 if _name.endswith("base.eth"):
                     base_name = _name
-                    expired_at = record.get("expired_at", "1970-01-01 00:00:00")
+                    expired_at = record.get("expire_time", "1970-01-01 00:00:00")
                     owner = record.get("owner", None)
                     if owner is not None and owner == "0x000000000000000000000000000000000000":
                         owner = None
-                    
+
                     resolved_adress = record.get("resolved_adress", None)
                     if resolved_adress is not None and resolved_adress == "0x000000000000000000000000000000000000":
                         resolved_adress = None
+
+                    resolver = record.get("resolver", None)
+                    if resolver is not None and resolver == "0x000000000000000000000000000000000000":
+                        resolver = None
 
                     reverse_address = record.get("reverse_address", None)
                     if reverse_address is not None and reverse_address == "0x000000000000000000000000000000000000":
@@ -165,12 +218,146 @@ class BasenamesGraph():
             else:
                 # if name is not exist
                 continue
-
         
-        domain_identity_id = "{},{}".format(platform, base_name)
+        # `resolved_adress` is missing, set `resolved_adress` equal to reverse_address
+        if owner is not None and reverse_address is None and reverse_address is not None:
+            resolved_adress = reverse_address
+
+        # `resolved_adress` is missing, but resolver is L2 Resolver, set `resolved_adress` equal to owner
+        # if owner is not None and resolver is not None and resolved_adress is None:
+        #     resolved_adress = owner
+
+        vertices = []
+        edges = []
+        updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+        domain_identity_id = "basenames,{}".format(base_name)
+        owner_identity = {}
+        resolved_identity = {}
+        reverse_identity = {}
+        domain_identity = {
+            "id": {"value": domain_identity_id, "op": "ignore_if_exists"},
+            "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+            "platform": {"value": "basenames", "op": "ignore_if_exists"},
+            "identity": {"value": base_name, "op": "ignore_if_exists"},
+            "display_name": {"value": base_name},
+            "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+            "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+            "updated_at": {"value": updated_at, "op": "max"},
+            "expired_at": {"value": expired_at, "op": "max"},
+            "reverse": {"value": reverse, "op": "or"}
+        }
+        contract = {
+            "id": {"value": "base,{}".format("0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5"), "op": "ignore_if_exists"},
+            "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+            "category": {"value": "basenames"},
+            "address": {"value": "0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5"},
+            "chain": {"value": "base"},
+            "symbol": {"value": "Basenames"},
+            "updated_at": {"value": updated_at, "op": "max"}
+        }
+
+        if owner is not None:
+            owner_identity = {
+                "id": {"value": "ethereum,{}".format(owner), "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "ethereum", "op": "ignore_if_exists"},
+                "identity": {"value": owner, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "reverse": {"value": reverse, "op": "or"}
+            }
+
+        if resolved_adress is not None:
+            resolved_identity = {
+                "id": {"value": "ethereum,{}".format(resolved_adress), "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "ethereum", "op": "ignore_if_exists"},
+                "identity": {"value": resolved_adress, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "reverse": {"value": reverse, "op": "or"}
+            }
+
+        if reverse_address is not None:
+            reverse_identity = {
+                "id": {"value": "ethereum,{}".format(reverse_address), "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "ethereum", "op": "ignore_if_exists"},
+                "identity": {"value": reverse_address, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "reverse": {"value": reverse, "op": "or"}
+            }
+
         if owner is not None and resolved_adress is None:
-            # Resolve record not existed anymore. Save owner address.
-            vids = [owner]
+            # Resolve record not existed anymore. Save owner address
+            # owner -(Hold)-> domain
+            vids = [owner_identity["id"]["value"]]
+            allocate_res = self.call_allocation(vids)
+            hv_id = allocate_res["return_graph_id"]
+            hv = {
+                "id": {"value": hv_id, "op": "ignore_if_exists"},
+                "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+            }
+            vertices.append(Vertex(
+                vertex_id=hv["id"]["value"],
+                vertex_type="IdentitiesGraph",
+                attributes=hv
+            ))
+            vertices.append(Vertex(
+                vertex_id=owner_identity["id"]["value"],
+                vertex_type="Identities",
+                attributes=owner_identity
+            ))
+            vertices.append(Vertex(
+                vertex_id=domain_identity["id"]["value"],
+                vertex_type="Identities",
+                attributes=domain_identity
+            ))
+            vertices.append(Vertex(
+                vertex_id=contract["id"]["value"],
+                vertex_type="Contracts",
+                attributes=contract
+            ))
+
+            ownership = {
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "source": {"value": "basenames"},
+                "transaction": {"value": transaction_hash},
+                "id": {"value": base_name, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "fetcher": {"value": "data_service"},
+                "expired_at": {"value": expired_at, "op": "max"},
+            }
+            edges.append(Edge(
+                edge_type="PartOfIdentitiesGraph_Reverse",
+                from_id=hv["id"]["value"],
+                from_type="IdentitiesGraph",
+                to_id=domain_identity["id"]["value"],
+                to_type="Identities",
+                attributes={}
+            ))
+            edges.append(Edge(
+                edge_type="Hold_Identity",
+                from_id=owner_identity["id"]["value"],
+                from_type="Identities",
+                to_id=domain_identity["id"]["value"],
+                to_type="Identities",
+                attributes=ownership
+            ))
+            edges.append(Edge(
+                edge_type="Hold_Contract",
+                from_id=owner_identity["id"]["value"],
+                from_type="Identities",
+                to_id=contract["id"]["value"],
+                to_type="Contracts",
+                attributes=ownership
+            ))
+
         elif owner is not None and resolved_adress is not None:
             if reverse_address is None:
                 # No ClaimReverse
@@ -199,16 +386,12 @@ class BasenamesGraph():
                     owner_vids = [owner]
                 elif resolved_adress == reverse_address and owner != resolved_adress:
                     vids = [resolved_adress, domain_identity_id]
-                    # owner -(Hold)-> domain,
+                    # owner -(Hold)-> domain
+                    # reverse_address -(Reverse_Resolve)-> domain
                     owner_vids = [owner]
 
-        elif owner is not None and resolved_adress is None and reverse_address is not None:
-            # resolved_adress is missing, set `resolved_adress` equal to reverse_address
-            resolved_adress = reverse_address
-            vids = [resolved_adress, domain_identity_id]
+        self.upsert_graph(vertices, edges)
 
-            # owner -(Hold)-> domain,
-            owner_vids = [owner]
 
     def burn(self, upsert_data):
         pass
@@ -248,7 +431,7 @@ class BasenamesGraph():
 
         logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
         if is_registered:
-            self.mint(upsert_data)
+            self.mint(block_datetime, transaction_hash, upsert_data)
         else:
             # if not register tx but changed owner/resolved_address/reverse_address
             if is_change_owner:
@@ -262,6 +445,39 @@ class BasenamesGraph():
 
 
 if __name__ == "__main__":
+    import setting.filelogger as logger
+    config = setting.load_settings(env="development")
+    logger.InitLogger(config)
+    upsert_data = {
+        "namenode": "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433",
+        "label": "0x8304cacded7fef52f9888c1733b295237821952ab20030c9b6f116abd04bb17f",
+        "erc721_token_id": "59261450257229771348166480503003851733994962416400902564228917130619647668607",
+        "owner": "0x94a7677478caa3e401af6f99e783e7ce913428ce",
+        "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+        "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+        "expire_time": "2025-08-24 01:31:03",
+        "registration_time": "2024-08-23 19:31:03",
+        "name": "dashiell.base.eth"
+    }
+
+    processed_data = {
+        "block_datetime": "2024-08-21 15:17:59",
+        "transaction_hash": "0x27a652d95dcbe52cd3cb025414ca13d5c5c940dae10c8e10eb6d1ff900cdadfb",
+        "upsert_data": {
+            "0xfdb6ae5fba4218400f520992143ec4c5f4d02bbbce79d6b30d20c59be5b36433": upsert_data,
+        },
+        "is_primary": False,
+        "is_change_owner": True,
+        "is_change_resolved": False,
+        "is_registered": True,
+        "set_name_record": {},
+    }
+
+    print(json.dumps(processed_data))
+
+    BasenamesGraph().save_tigergraph(processed_data)
+
+    exit(1)
     # Example usage
     nanoseconds = get_unix_milliconds()
     print(nanoseconds)
