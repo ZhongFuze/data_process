@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 12:37:32
+LastEditTime: 2024-09-02 22:41:01
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -349,7 +349,7 @@ class BasenamesGraph():
         base_name = None
         owner = None
         resolver = None
-        resolved_adress = None
+        resolved_address = None
         reverse_address = None
         reverse_name = None
         reverse = False
@@ -365,9 +365,9 @@ class BasenamesGraph():
                     if owner is not None and owner == "0x000000000000000000000000000000000000":
                         owner = None
 
-                    resolved_adress = record.get("resolved_adress", None)
-                    if resolved_adress is not None and resolved_adress == "0x000000000000000000000000000000000000":
-                        resolved_adress = None
+                    resolved_address = record.get("resolved_address", None)
+                    if resolved_address is not None and resolved_address == "0x000000000000000000000000000000000000":
+                        resolved_address = None
 
                     resolver = record.get("resolver", None)
                     if resolver is not None and resolver == "0x000000000000000000000000000000000000":
@@ -391,13 +391,13 @@ class BasenamesGraph():
                 # if name is not exist
                 continue
         
-        # `resolved_adress` is missing, set `resolved_adress` equal to reverse_address
+        # `resolved_address` is missing, set `resolved_address` equal to reverse_address
         if owner is not None and reverse_address is None and reverse_address is not None:
-            resolved_adress = reverse_address
+            resolved_address = reverse_address
 
-        # # `resolved_adress` is missing, but resolver is L2 Resolver, set `resolved_adress` equal to owner
-        if owner is not None and resolver is not None and resolved_adress is None:
-            resolved_adress = owner
+        # # `resolved_address` is missing, but resolver is L2 Resolver, set `resolved_address` equal to owner
+        if owner is not None and resolver is not None and resolved_address is None:
+            resolved_address = owner
 
         vertices = []
         edges = []
@@ -463,12 +463,12 @@ class BasenamesGraph():
                 "reverse": {"value": reverse, "op": "or"}
             }
 
-        if resolved_adress is not None:
+        if resolved_address is not None:
             resolved_identity = {
-                "id": {"value": "ethereum,{}".format(resolved_adress), "op": "ignore_if_exists"},
+                "id": {"value": "ethereum,{}".format(resolved_address), "op": "ignore_if_exists"},
                 "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
                 "platform": {"value": "ethereum", "op": "ignore_if_exists"},
-                "identity": {"value": resolved_adress, "op": "ignore_if_exists"},
+                "identity": {"value": resolved_address, "op": "ignore_if_exists"},
                 "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
                 "added_at": {"value": updated_at, "op": "ignore_if_exists"},
                 "updated_at": {"value": updated_at, "op": "max"},
@@ -488,7 +488,7 @@ class BasenamesGraph():
             }
 
         # add condition[owner not null and resolved_address is null]
-        if owner is not None and resolved_adress is None:
+        if owner is not None and resolved_address is None:
             # Resolve record not existed anymore. Save owner address
             # hyper_vertex -> owner
             # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
@@ -545,14 +545,14 @@ class BasenamesGraph():
             ))
 
         # add condition[owner not null and resolved_address is not null]
-        elif owner is not None and resolved_adress is not None:
+        elif owner is not None and resolved_address is not None:
             if reverse_address is None:
                 # No ClaimReverse
-                if owner == resolved_adress:
-                    # add condition [and resolved_adress = owner]
-                    # hyper_vertex -> (resolved_adress, domain)
+                if owner == resolved_address:
+                    # add condition [and resolved_address = owner]
+                    # hyper_vertex -> (resolved_address, domain)
                     # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
-                    # domain -(Resolve)-> resolved_adress
+                    # domain -(Resolve)-> resolved_address
                     vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
                     allocate_res = self.call_allocation(vids)
                     hv_id = allocate_res["return_graph_id"]
@@ -607,10 +607,10 @@ class BasenamesGraph():
                     ))
 
                 else:
-                    # add condition [and resolved_adress != owner]
-                    # domain & resolved_adress will be added to hyper_vertex IdentitiesGraph
-                    # hyper_vertex -> (resolved_adress, domain)
-                    # domain -(Resolve)-> resolved_adress
+                    # add condition [and resolved_address != owner]
+                    # domain & resolved_address will be added to hyper_vertex IdentitiesGraph
+                    # hyper_vertex -> (resolved_address, domain)
+                    # domain -(Resolve)-> resolved_address
                     # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
 
                     # NOTICE: In mint action, there is no case where owner != resolution
@@ -618,11 +618,11 @@ class BasenamesGraph():
                     pass
             else:
                 # reverse_address is not None ## Has ClaimReverse Records
-                if owner == resolved_adress and resolved_adress == reverse_address:
-                    # add condition [owner = resolved_adress and resolved_adress = reverse_address]
+                if owner == resolved_address and resolved_address == reverse_address:
+                    # add condition [owner = resolved_address and resolved_address = reverse_address]
                     # hyper_vertex -> (owner, domain)
                     # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
-                    # domain -(Resolve)-> resolved_adress
+                    # domain -(Resolve)-> resolved_address
                     # reverse_address -(Resolve)-> domain
                     vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
                     allocate_res = self.call_allocation(vids)
@@ -687,7 +687,7 @@ class BasenamesGraph():
                         attributes=resolve_edge
                     ))
 
-                elif owner == resolved_adress and resolved_adress != reverse_address:
+                elif owner == resolved_address and resolved_address != reverse_address:
                     vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
                     allocate_res = self.call_allocation(vids)
                     hv_id = allocate_res["return_graph_id"]

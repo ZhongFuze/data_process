@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-06-04 17:29:28
 LastEditors: Zella Zhong
-LastEditTime: 2024-07-20 04:21:38
+LastEditTime: 2024-09-02 18:45:20
 FilePath: /data_process/src/service/clusters_name.py
 Description: https://docs.clusters.xyz/
 '''
@@ -80,6 +80,8 @@ class Fetcher():
             return None
         raw_text = response.text
         res = json.loads(raw_text)
+        # logging.info("bulk_get_clusters clusters_list = {}".format(payload))  
+        # logging.info("bulk_get_clusters raw_text = {}, res = {}".format(raw_text, res))
         return res
 
     @sleep_and_retry
@@ -574,7 +576,7 @@ class Fetcher():
     def online_dump(self):
         '''
         description: Real-time data dumps to database.
-        ''' 
+        '''
         conn = psycopg2.connect(setting.PG_DSN["clusters"])
         conn.autocommit = True
         cursor = conn.cursor()
