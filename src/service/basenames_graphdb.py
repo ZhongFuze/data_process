@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 08:46:54
+LastEditTime: 2024-09-02 12:37:32
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -74,6 +74,37 @@ class BasenamesGraph():
     def __init__(self):
         pass
 
+    def call_unallocation(self, vids):
+        '''
+        description:
+        requestbody: {
+            "vids": ["string"],
+        }
+        return: {
+            {
+                "unique_id_1": "old_graph_id_1",
+                "unique_id_2": "old_graph_id_2",
+            }
+                
+        }
+        '''
+        unallocation_url = "{}/id_allocation/unallocation".format(setting.ID_ALLOCATION_SETTINGS["url"])
+        param = {"vids": vids}
+        payload = json.dumps(param)
+        logging.info("unallocation vids: {}".format(vids))
+        response = requests.post(url=unallocation_url, data=payload, timeout=30)
+        if response.status_code != 200:
+            logging.warn("unallocation failed: url={}, {} {}".format(unallocation_url, response.status_code, response.reason))
+            return None
+        raw_text = response.text
+        res = json.loads(raw_text)
+        if "code" in res:
+            if res["code"] != 0:
+                logging.warn("unallocation failed: url={}, code={} err={}".format(unallocation_url, res["code"], res["msg"]))
+                return None
+            return res["data"]
+        return None
+
     def call_allocation(self, vids):
         '''
         description:
@@ -133,7 +164,7 @@ class BasenamesGraph():
                 target_vertex_type,
                 target_vertex_id
             )
-            # logging.debug("delete_url: {}".format(delete_url))
+            logging.info("delete_url: {}".format(delete_url))
             response = requests.delete(url=delete_url, timeout=60)
             if response.status_code != 200:
                 error_msg = "tigergraph delete failed: url={}, {} {}".format(delete_url, response.status_code, response.reason)
@@ -144,7 +175,7 @@ class BasenamesGraph():
             if "error" in res:
                 if res["error"] is True:
                     error_msg = "tigergraph delete failed: url={}, error={}".format(delete_url, res)
-                    logging.error(error_msg)
+                    logging.warn(error_msg)
 
             logging.debug("tigergraph delete res: {}".format(res))
         else:
@@ -159,11 +190,11 @@ class BasenamesGraph():
                 target_vertex_id,
                 discriminator
             )
-            # logging.debug("delete_url: {}".format(delete_url))
+            logging.info("delete_url: {}".format(delete_url))
             response = requests.delete(url=delete_url, timeout=60)
             if response.status_code != 200:
                 error_msg = "tigergraph delete failed: url={}, {} {}".format(delete_url, response.status_code, response.reason)
-                logging.error(error_msg)
+                logging.warn(error_msg)
 
             raw_text = response.text
             res = json.loads(raw_text)
@@ -769,11 +800,10 @@ class BasenamesGraph():
             if expire_time is not None:
                 if expire_time > 0:
                     expired_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expire_time))
-            
+
             # delete old owner -(Hold)-> domain
             if old_owner is not None:
                 old_owner_id = "ethereum,{}".format(old_owner)
-                # burn nft or change owne
                 self.delete_edge_by_source_target(
                     source_vertex_type="Identities",
                     source_vertex_id=old_owner_id,
@@ -793,6 +823,8 @@ class BasenamesGraph():
 
             if new_owner is not None and new_owner == "0x000000000000000000000000000000000000":
                 # if burn name, do not create new ownership
+                # burn nft, delete basenames from id_allocation
+                self.call_unallocation([domain_id])
                 new_owner = None
                 continue
 
@@ -837,6 +869,11 @@ class BasenamesGraph():
                 vertex_type="Identities",
                 attributes=owner_identity
             ))
+            vertices.append(Vertex(
+                vertex_id=domain_identity["id"]["value"],
+                vertex_type="Identities",
+                attributes=domain_identity
+            ))
             edges.append(Edge(
                 edge_type="Hold_Identity",
                 from_id=owner_identity["id"]["value"],
@@ -855,8 +892,136 @@ class BasenamesGraph():
             ))
             self.upsert_graph(vertices, edges)
 
-    def change_resolved_address(self, upsert_data):
-        pass
+    def change_resolved_address(self, block_datetime, upsert_data):
+        # "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0": {
+        #         "namenode": "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0",
+        #         "resolved_records": {
+        #             "60": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
+        #         },
+        #         "resolved_address": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
+        #     },
+        for namenode, record in upsert_data.items():
+            new_address = record.get("resolved_address", None)
+            if new_address is None:
+                continue
+
+            # query namenode for whole record
+            # need to get owner record for this change
+            whole_record = self.get_whole_record(namenode)
+            if whole_record is None:
+                continue
+
+            old_address = whole_record.get("resolved_address", None)
+            base_name = whole_record.get("name", None)
+            expire_time = whole_record.get("expire_time", None)
+
+            if base_name is None:
+                continue
+            if not base_name.endswith("base.eth"):
+                continue
+
+            new_address_id = "ethereum,{}".format(new_address)
+            domain_id = "basenames,{}".format(base_name)
+            resolve_discriminator = "basenames,basenames,{}".format(base_name) # source:system:name
+
+            unallocation_map = self.call_unallocation([domain_id])
+            old_graph_id = unallocation_map.get(domain_id, "")
+            if old_address is not None:
+                old_address_id = "ethereum,{}".format(old_address)
+                # delete domain -(Resolve)-> old_address
+                self.delete_edge_by_source_target(
+                    source_vertex_type="Identities",
+                    source_vertex_id=domain_id,
+                    edge_type="Resolve",
+                    target_vertex_type="Identities",
+                    target_vertex_id=old_address_id,
+                    discriminator=resolve_discriminator
+                )
+                # delete old_hyper_vertex -> domain
+                if old_graph_id != "":
+                    self.delete_edge_by_source_target(
+                        source_vertex_type="IdentitiesGraph",
+                        source_vertex_id=old_graph_id,
+                        edge_type="PartOfIdentitiesGraph_Reverse",
+                        target_vertex_type="Identities",
+                        target_vertex_id=domain_id,
+                        discriminator=None
+                    )
+
+            vertices = []
+            edges = []
+            updated_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+            expired_at = "1970-01-01 00:00:00"
+            if expire_time is not None:
+                if expire_time > 0:
+                    expired_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expire_time))
+
+            # add new_hyper_vertex -> (domain, new_address)
+            # add new_hyper_vertex -> new_address
+            # add domain -(Resolve)-> new_address
+            domain_identity = {
+                "id": {"value": domain_id, "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "basenames", "op": "ignore_if_exists"},
+                "identity": {"value": base_name, "op": "ignore_if_exists"},
+                "display_name": {"value": base_name},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+                "expired_at": {"value": expired_at, "op": "max"},
+            }
+            resolved_identity = {
+                "id": {"value": new_address_id, "op": "ignore_if_exists"},
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "platform": {"value": "ethereum", "op": "ignore_if_exists"},
+                "identity": {"value": new_address, "op": "ignore_if_exists"},
+                "created_at": {"value": block_datetime, "op": "ignore_if_exists"},
+                "added_at": {"value": updated_at, "op": "ignore_if_exists"},
+                "updated_at": {"value": updated_at, "op": "max"},
+            }
+            resolve_edge = {
+                "uuid": {"value": str(uuid.uuid4()), "op": "ignore_if_exists"},
+                "source": {"value": "basenames"},
+                "system": {"value": "basenames"},
+                "name": {"value": base_name, "op": "ignore_if_exists"},
+                "fetcher": {"value": "data_service"},
+                "updated_at": {"value": updated_at, "op": "max"},
+            }
+            vids = [resolved_identity["id"]["value"], domain_identity["id"]["value"]]
+            allocate_res = self.call_allocation(vids)
+            hv_id = allocate_res["return_graph_id"]
+            hv = {
+                "id": {"value": hv_id, "op": "ignore_if_exists"},
+                "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+            }
+            vertices.append(Vertex(vertex_id=hv["id"]["value"], vertex_type="IdentitiesGraph", attributes=hv))
+            vertices.append(Vertex(vertex_id=resolved_identity["id"]["value"], vertex_type="Identities", attributes=resolved_identity))
+            vertices.append(Vertex(vertex_id=domain_identity["id"]["value"], vertex_type="Identities", attributes=domain_identity))
+            edges.append(Edge(
+                edge_type="PartOfIdentitiesGraph_Reverse",
+                from_id=hv["id"]["value"],
+                from_type="IdentitiesGraph",
+                to_id=resolved_identity["id"]["value"],
+                to_type="Identities",
+                attributes={}
+            ))
+            edges.append(Edge(
+                edge_type="PartOfIdentitiesGraph_Reverse",
+                from_id=hv["id"]["value"],
+                from_type="IdentitiesGraph",
+                to_id=domain_identity["id"]["value"],
+                to_type="Identities",
+                attributes={}
+            ))
+            edges.append(Edge(
+                edge_type="Resolve",
+                from_id=domain_identity["id"]["value"],
+                from_type="Identities",
+                to_id=resolved_identity["id"]["value"],
+                to_type="Identities",
+                attributes=resolve_edge
+            ))
+            self.upsert_graph(vertices, edges)
 
     def change_reverse_address(self, block_datetime, upsert_data):
         for namenode, record in upsert_data.items():
@@ -890,8 +1055,7 @@ class BasenamesGraph():
                 if base_name is not None:
                     if base_name.endswith("base.eth"):
                         old_base_name = base_name
-            
-            old_base_name = "portsmouth.base.eth"
+
             if old_base_name is not None:
                 old_name_id = "basenames,{}".format(old_base_name)
                 reverse_discriminator = "basenames,basenames,{}".format(old_base_name) # source:system:name
@@ -981,21 +1145,20 @@ class BasenamesGraph():
         is_registered = processed_data["is_registered"]
         block_datetime = processed_data["block_datetime"]
         upsert_data = processed_data["upsert_data"]
-        set_name_record = processed_data["set_name_record"]
 
         logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
         if is_registered:
             self.mint(block_datetime, upsert_data)
         else:
-            # if not register tx but changed owner/resolved_address/reverse_address
             if is_change_owner:
                 self.change_owner(block_datetime, upsert_data)
 
             if is_change_resolved:
-                self.change_resolved_address(upsert_data)
+                self.change_resolved_address(block_datetime, upsert_data)
 
-            if is_primary:
-                self.change_reverse_address(block_datetime, upsert_data)
+        # update reverse_address -> primary_name
+        if is_primary:
+            self.change_reverse_address(block_datetime, upsert_data)
 
 
 if __name__ == "__main__":
@@ -1188,9 +1351,105 @@ if __name__ == "__main__":
         "set_name_record": {},
     }
 
+    processed_data_before_AddrChanged = {
+        "block_datetime": "2024-08-21 20:49:35",
+        "transaction_hash": "0x8795761f1f03ecc2ea64bce6556740f3ad74425bbc855ec14f3890ba588c5070",
+        "upsert_data": {
+            "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0": {
+                "namenode": "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0",
+                "label": "0x018081707894f138c575af4073192d072785d45866601c25eb04b3c5ea13d949",
+                "erc721_token_id": "679362630366408583436030840036045849236151838631682046625149130584532179273",
+                "owner": "0x3e045a7494f879b209307890f4e5d81b349b2074",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2025-08-22 02:49:35",
+                "registration_time": "2024-08-21 20:49:35",
+                "resolved_records": {
+                    "60": "0x3e045a7494f879b209307890f4e5d81b349b2074"
+                },
+                "resolved_address": "0x3e045a7494f879b209307890f4e5d81b349b2074",
+                "name": "sylveon.base.eth",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "reverse_address": "0x3e045a7494f879b209307890f4e5d81b349b2074"
+            },
+        },
+        "is_primary": True,
+        "is_change_owner": True,
+        "is_change_resolved": True,
+        "is_registered": True,
+        "set_name_record": {},
+    }
 
-    print(json.dumps(processed_data_change_reverse))
-    BasenamesGraph().save_tigergraph(processed_data_change_reverse)
+    processed_data_AddrChanged = {
+        "block_datetime": "2024-09-01 20:53:17",
+        "transaction_hash": "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0",
+        "upsert_data": {
+            "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0": {
+                "namenode": "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0",
+                "resolved_records": {
+                    "60": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
+                },
+                "resolved_address": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
+            },
+        },
+        "is_primary": False,
+        "is_change_owner": False,
+        "is_change_resolved": True,
+        "is_registered": False,
+        "set_name_record": {},
+    }
+
+    processed_data_AddrChanged_transfer = {
+        "block_datetime": "2024-09-01 20:53:53",
+        "transaction_hash": "0x267e105915be25ae3362a9beae234d1fbbd560fc93effc6c2016b5176355b64c",
+        "upsert_data": {
+            "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0": {
+                "namenode": "0xd8de744ca429e1f5888bf1a9e023571b3ea91959cae7f3e61f3de575db02b3d0",
+                "label": "0x018081707894f138c575af4073192d072785d45866601c25eb04b3c5ea13d949",
+                "erc721_token_id": "679362630366408583436030840036045849236151838631682046625149130584532179273",
+                "owner": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
+            },
+        },
+        "is_primary": False,
+        "is_change_owner": True,
+        "is_change_resolved": False,
+        "is_registered": False,
+        "set_name_record": {},
+    }
+
+    processed_data_mint_reverse_change = {
+        "block_datetime": "2024-08-22 02:50:43",
+        "transaction_hash": "0x061d9123db10ee7f8e0a618b858e05594e33a336ce1fca8516cddcc92a0264ee",
+        "upsert_data": {
+            "0xb02c9087c9236f6f23be8cdd7ec740c9a02053ac622f9829fb540eed6e91f2f4": {
+                "namenode": "0xb02c9087c9236f6f23be8cdd7ec740c9a02053ac622f9829fb540eed6e91f2f4",
+                "label": "0x39975ac9b80a1827c586efcaa9a8097459bc6592486040db760af466ace9058c",
+                "erc721_token_id": "26049252871529825663637228484592061900124825022280283164622964224114127603084",
+                "owner": "0x3e045a7494f879b209307890f4e5d81b349b2074",
+                "parent_node": "0xff1e3c0eb00ec714e34b6114125fbde1dea2f24a72fbf672e7b7fd5690328e10",
+                "resolver": "0xc6d566a56a1aff6508b41f6c90ff131615583bcd",
+                "expire_time": "2025-08-22 08:50:43",
+                "registration_time": "2024-08-22 02:50:43",
+                "resolved_records": {
+                    "60": "0x3e045a7494f879b209307890f4e5d81b349b2074"
+                },
+                "resolved_address": "0x3e045a7494f879b209307890f4e5d81b349b2074",
+                "name": "dexguru.base.eth",
+                "reverse_address": "0x3e045a7494f879b209307890f4e5d81b349b2074"
+            },
+        },
+        "is_primary": True,
+        "is_change_owner": True,
+        "is_change_resolved": True,
+        "is_registered": True,
+        "set_name_record": {},
+    }
+
+
+    # print(json.dumps(processed_data_mint_reverse_change))
+    # BasenamesGraph().save_tigergraph(processed_data_before_AddrChanged)
+    # BasenamesGraph().save_tigergraph(processed_data_AddrChanged)
+    # BasenamesGraph().save_tigergraph(processed_data_AddrChanged_transfer)
+    BasenamesGraph().save_tigergraph(processed_data_mint_reverse_change)
 
     # # Example usage
     # namenode = "0xfbaa2c1b3eb73f61d64532221cf51fc5cef0999a85793515f3cb1a99f8ca0239"
