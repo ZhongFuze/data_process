@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-28 00:45:29
+LastEditTime: 2024-09-02 18:45:44
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -37,6 +37,8 @@ from eth_utils import decode_hex, to_text, to_checksum_address, encode_hex, kecc
 
 
 import setting
+
+from .basenames_graphdb import BasenamesGraph
 
 # day seconds
 DAY_SECONDS = 24 * 60 * 60
@@ -141,12 +143,19 @@ def execute_query(query_id, payload):
         "x-api-key": setting.CHAINBASE_SETTINGS["api_key"],
         "Content-Type": "application/json",
     }
+    query_url = f"https://api.chainbase.com/api/v1/query/{query_id}/execute"
     response = requests.post(
-        f"https://api.chainbase.com/api/v1/query/{query_id}/execute",
+        query_url,
         json=payload,
         headers=headers,
         timeout=60
     )
+    if response.status_code != 200:
+        err_msg = "Chainbase API response failed: url={}, payload={}, {} {}".format(
+            query_url, payload, response.status_code, response.reason)
+        logging.warn(err_msg)
+        raise Exception(err_msg)
+
     return response.json()['data'][0]['executionId']
 
 
@@ -632,10 +641,13 @@ class Fetcher():
         '''
         upsert_record = {}
         upsert_data = {}
-        is_primary = False
         set_name_record = {}
+
         log_count = 0
+        is_primary = False
         is_registered = False
+        is_change_owner = False
+        is_change_resolved = False
         transaction_hash = ""
         block_datetime = ""
         block_unix = 0
@@ -701,6 +713,7 @@ class Fetcher():
                 upsert_record[node]["update_record"][log_index] = {
                     "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
+                is_change_owner = True
                 is_reverse = False
                 if parent_node == BASE_REVERSE_NODE:
                     is_reverse = True
@@ -840,6 +853,7 @@ class Fetcher():
                 upsert_data[node]["erc721_token_id"] = decoded["erc721_token_id"]
                 upsert_data[node]["owner"] = decoded["to_address"]
 
+                is_change_owner = True
                 if node not in upsert_record:
                     upsert_record[node] = {
                         "block_timestamp": unix_string_to_datetime(block_unix),
@@ -881,6 +895,7 @@ class Fetcher():
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
 
+                is_change_resolved = True
                 # resolved_records
                 upsert_data[node]["namenode"] = node
                 if "resolved_records" not in upsert_data[node]:
@@ -909,6 +924,7 @@ class Fetcher():
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["resolved_address"] = new_address
 
+                is_change_resolved = True
                 if "resolved_records" not in upsert_data[node]:
                     upsert_data[node]["resolved_records"] = {}  # key=coin_type, value=address
                 upsert_data[node]["resolved_records"][str(coin_type)] = new_address
@@ -1002,9 +1018,13 @@ class Fetcher():
 
         process_result = {
             "block_datetime": block_datetime,
+            "transaction_hash": transaction_hash,
             "upsert_data": upsert_data,
             "upsert_record": upsert_record,
             "is_primary": is_primary,
+            "is_change_owner": is_change_owner,
+            "is_change_resolved": is_change_resolved,
+            "is_registered": is_registered,
             "set_name_record": set_name_record,
         }
         return process_result
@@ -1376,6 +1396,10 @@ class Fetcher():
                 process_result = self.transaction_process(sorted_group)
                 block_datetime = process_result["block_datetime"]
                 is_primary = process_result["is_primary"]
+                
+                # NOTICE: Upsert graph needs call before updating basenames registry table
+                # because some old states need to be record and modified
+                BasenamesGraph().save_tigergraph(process_result)
                 self.save_basenames(process_result["upsert_data"], cursor)
                 self.save_basenames_update_record(process_result["upsert_record"], cursor)
                 if is_primary:
@@ -1407,7 +1431,7 @@ class Fetcher():
         record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
         return record_df
 
-    def online_dump(self):
+    def online_dump(self, check_point=None):
         '''
         description: Real-time data dumps to database.
         '''
@@ -1416,6 +1440,8 @@ class Fetcher():
         cursor = conn.cursor()
 
         start_block_number = self.get_latest_block_from_db(cursor)
+        if check_point is not None:
+            start_block_number = check_point
         # for refetch block number
         start_block_number = start_block_number - 600
         end_block_number = self.get_latest_block_from_rpc()
@@ -1940,7 +1966,7 @@ def generate_label_hash(address):
     '''Calculate sha3HexAddress and namehash for reverse resolution'''
     hex_address = address.lower().replace("0x", "")
     address_bytes = bytes(hex_address, 'utf-8')
-    label_hash = keccak256(address_bytes)
+    label_hash = keccak(address_bytes)
 
     base_reverse_node_bytes = to_bytes(hexstr=BASE_REVERSE_NODE)
     base_reverse_node = keccak(base_reverse_node_bytes + label_hash)

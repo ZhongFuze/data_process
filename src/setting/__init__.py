@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 01:56:16
+LastEditTime: 2024-09-02 05:16:09
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -52,6 +52,8 @@ PG_DSN = {
 
 TIGERGRAPH_SETTINGS = {
     "host": "",
+    "inner_port": 9000,
+    "restpp": 14240,
     "username": "",
     "password": "",
     "social_graph_name": "",
@@ -116,6 +118,8 @@ def load_tdb(config_file):
         config = toml.load(config_file)
         tdb_settings = {
             "host": config["tdb"]["host"],
+            "inner_port": config["tdb"]["inner_port"],
+            "restpp": config["tdb"]["restpp"],
             "username": config["tdb"]["username"],
             "password": config["tdb"]["password"],
             "social_graph_name": config["tdb"]["social_graph_name"],
