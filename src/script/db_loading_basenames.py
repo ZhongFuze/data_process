@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-09-02 18:47:44
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 16:19:08
+LastEditTime: 2024-09-03 18:53:34
 FilePath: /data_process/src/script/db_loading_basenames.py
 Description: 
 '''
@@ -89,7 +89,6 @@ def batch_update_allocation(check_point):
             graph_id,
             platform,
             identity,
-            platform,
             updated_nanosecond
         ) VALUES %s
         ON CONFLICT (unique_id)
@@ -112,10 +111,15 @@ def batch_update_allocation(check_point):
             ss = i * per_count
             ee = (i + 1) * per_count
             batch_data = upsert_data[ss:ee]
-
-            if batch_data:
-                # execute_values(cursor, sql_statement, batch_data)
-                logging.info("Batch insert completed {} records.".format(len(batch_data)))
+            unique_data = []
+            unique_dict = {}
+            for row in batch_data:
+                if row[0] not in unique_dict:
+                    unique_dict[row[0]] = True
+                    unique_data.append(row)
+            if unique_data:
+                execute_values(cursor, sql_statement, unique_data)
+                logging.info("Batch insert completed {} records.".format(len(unique_data)))
             else:
                 logging.debug("No valid upsert_data to process.")
 
@@ -131,14 +135,127 @@ def batch_update_allocation(check_point):
         cursor.close()
         conn.close()
 
+
+def preallocate_address(check_point):
+    check_point_dirs = os.path.join(basenames_data_dirs, str(check_point))
+    if not os.path.exists(check_point_dirs):
+        os.makedirs(check_point_dirs)
+
+    read_file = os.path.join(basenames_data_dirs, "basenames_join_%d.csv" % check_point)
+    has_header = True
+    cnt = 0
+
+    address_alloc_dict = {}
+    with open(read_file, "r", encoding="utf-8") as fr:
+        # namenode,name,registration_time,expire_time,resolver,owner,owner_graph_id,owner_updated_nanosecond,
+        # item[8]=resolved_address,resolved_graph_id,resolved_updated_nanosecond,
+        # item[11]=reverse_address,reverse_graph_id,reverse_updated_nanosecond,is_primary,update_time
+        for line in fr.readlines():
+            if cnt == 0 and has_header:
+                cnt += 1
+                continue
+            
+            cnt += 1
+            line = line.rstrip()
+            item = line.split('\t')
+            namenode = item[0]
+            name = item[1]
+            registration_time = item[2]
+            expire_time = item[3]
+            l2_resolver = item[4]
+            owner_addr = item[5]
+            owner_graph_id = item[6]
+            owner_updated_nanosecond = int(item[7])
+            resolved_addr = item[8]
+            resolved_graph_id = item[9]
+            resolved_updated_nanosecond = int(item[10])
+            reverse_addr = item[11]
+            reverse_graph_id = item[12]
+            reverse_updated_nanosecond = int(item[13])
+            is_primary = item[14]
+            update_time = item[15]
+
+            if name == "":
+                continue
+            if not name.endswith("base.eth"):
+                continue
+
+            if registration_time == "":
+                registration_time = "1970-01-01 00:00:00"
+            if update_time  == "":
+                update_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(time.time())))
+            if expire_time  == "":
+                expire_time = "1970-01-01 00:00:00"
+
+            resolver = None
+            resolved_address = None
+            owner = None
+            reverse_address = None
+
+            if l2_resolver != "":
+                resolver = l2_resolver
+
+            if owner_addr != "":
+                owner = owner_addr
+
+            if resolved_addr != "":
+                resolved_address = resolved_addr
+
+            if reverse_addr != "":
+                reverse_address = reverse_addr
+            
+            if owner is not None:
+                if owner_graph_id == "" or owner_updated_nanosecond == 0:
+                    # allocate not exist
+                    owner_graph_id = str(uuid.uuid4())
+                    owner_updated_nanosecond = get_unix_milliconds()
+                else:
+                    print("Owner Exist", owner, owner_graph_id, owner_updated_nanosecond)
+                if owner not in address_alloc_dict:
+                    address_alloc_dict[owner] = {"graph_id": owner_graph_id, "updated_nanosecond": owner_updated_nanosecond}
+            
+            if resolved_address is not None:
+                if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
+                    # allocate not exist
+                    resolved_graph_id = str(uuid.uuid4())
+                    resolved_updated_nanosecond = get_unix_milliconds()
+                else:
+                    print("Resolved Exist", resolved_address, resolved_graph_id, resolved_updated_nanosecond)
+                if resolved_address not in address_alloc_dict:
+                    address_alloc_dict[resolved_address] = {"graph_id": resolved_graph_id, "updated_nanosecond": resolved_updated_nanosecond}
+
+            if reverse_address is not None:
+                if reverse_graph_id == "" or reverse_updated_nanosecond == 0:
+                    # allocate not exist
+                    reverse_graph_id = str(uuid.uuid4())
+                    reverse_updated_nanosecond = get_unix_milliconds()
+                else:
+                    print("Reverse Exist", reverse_address, reverse_graph_id, reverse_updated_nanosecond)
+                if reverse_address not in address_alloc_dict:
+                    address_alloc_dict[reverse_address] = {"graph_id": reverse_graph_id, "updated_nanosecond": reverse_updated_nanosecond}
+
+    fw_address = open(os.path.join(check_point_dirs, "basenames_address.csv"), "w", encoding="utf-8")
+    for address, allocate_record in address_alloc_dict.items():
+        # address, graph_id, updated_nanosecond
+        fw_address.write("\t".join([address, allocate_record["graph_id"], str(allocate_record["updated_nanosecond"])]) + "\n")
+    fw_address.close()
+
 def prepare_loading_data(check_point):
     check_point_dirs = os.path.join(basenames_data_dirs, str(check_point))
     if not os.path.exists(check_point_dirs):
         os.makedirs(check_point_dirs)
 
     fw_allocation = open(os.path.join(check_point_dirs, "basenames_allocation.csv"), "w", encoding="utf-8")
-    # header = ["unique_id", "graph_id", "platform", "identity", "updated_nanosecond"]
-    # fw_allocation.write("\t".join(header) + "\n")
+    address_alloc_dict = {}
+    with open(os.path.join(check_point_dirs, "basenames_address.csv"), "r", encoding="utf-8") as fw_address:
+        for line in fw_address.readlines():
+            line = line.rstrip()
+            item = line.split("\t")
+            # address, graph_id, updated_nanosecond
+            address_alloc_dict[item[0]] = {
+                "graph_id": item[1],
+                "updated_nanosecond": int(item[2])
+            }
 
     fw_ethereum = open(os.path.join(check_point_dirs, "ethereum.Identities.csv"), "w", encoding="utf-8")
     header = ["primary_id", "id", "uuid", "platform", "identity", "created_at", "added_at", "updated_at", "reverse"]
@@ -283,12 +400,16 @@ def prepare_loading_data(check_point):
                 # Resolve record not existed anymore. Save owner address
                 # hyper_vertex -> (owner, domain)
                 # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
-                if owner_graph_id == "" or owner_updated_nanosecond == 0:
-                    # allocate not exist
+
+                if owner in address_alloc_dict:
+                    owner_graph_id = address_alloc_dict[owner]["graph_id"]
+                    owner_updated_nanosecond = address_alloc_dict[owner]["updated_nanosecond"]
+                else:
                     owner_graph_id = str(uuid.uuid4())
                     owner_updated_nanosecond = get_unix_milliconds()
-                    fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
-                    fw_allocation.write("\t".join([domain_id, owner_graph_id, "basenames", name, str(owner_updated_nanosecond)]) + "\n")
+
+                fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
+                fw_allocation.write("\t".join([domain_id, owner_graph_id, "basenames", name, str(owner_updated_nanosecond)]) + "\n")
 
                 fw_identity_graph.write("\t".join([owner_graph_id, owner_graph_id, str(owner_updated_nanosecond)]) + "\n")
                 fw_hyper_edge.write("\t".join([owner_graph_id, owner_identity_id]) + "\n")
@@ -306,12 +427,15 @@ def prepare_loading_data(check_point):
                         # hyper_vertex -> (resolved_address, domain)
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
                         # domain -(Resolve)-> resolved_address
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
-                            # allocate not exist
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -333,11 +457,15 @@ def prepare_loading_data(check_point):
                         # domain & resolved_address will be added to hyper_vertex IdentitiesGraph
                         # hyper_vertex -> (resolved_address, domain)
                         # domain -(Resolve)-> resolved_address
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -349,11 +477,14 @@ def prepare_loading_data(check_point):
 
                         # hyper_vertex -> (owner)
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
-                        if owner_graph_id == "" or owner_updated_nanosecond == 0:
-                            # allocate not exist
+                        if owner in address_alloc_dict:
+                            owner_graph_id = address_alloc_dict[owner]["graph_id"]
+                            owner_updated_nanosecond = address_alloc_dict[owner]["updated_nanosecond"]
+                        else:
                             owner_graph_id = str(uuid.uuid4())
                             owner_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([owner_graph_id, owner_graph_id, str(owner_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([owner_graph_id, owner_identity_id]) + "\n")
@@ -373,12 +504,15 @@ def prepare_loading_data(check_point):
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
                         # domain -(Resolve)-> resolved_address
                         # reverse_address -(Reverse_Resolve)-> domain
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
-                            # allocate not exist
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -401,12 +535,15 @@ def prepare_loading_data(check_point):
                         # hyper_vertex -> (resolved_address, domain)
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
                         # domain -(Resolve)-> resolved_address
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
-                            # allocate not exist
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -425,11 +562,14 @@ def prepare_loading_data(check_point):
 
                         # hyper_vertex -> (reverse_address)
                         # reverse_address -(Reverse_Resolve)-> domain
-                        if reverse_graph_id == "" or reverse_updated_nanosecond == 0:
-                            # allocate not exist
+                        if reverse_address in address_alloc_dict:
+                            reverse_graph_id = address_alloc_dict[reverse_address]["graph_id"]
+                            reverse_updated_nanosecond = address_alloc_dict[reverse_address]["updated_nanosecond"]
+                        else:
                             reverse_graph_id = str(uuid.uuid4())
                             reverse_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([reverse_identity_id, reverse_graph_id, "ethereum", reverse_address, str(reverse_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([reverse_identity_id, reverse_graph_id, "ethereum", reverse_address, str(reverse_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([reverse_graph_id, reverse_graph_id, str(reverse_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([reverse_graph_id, reverse_identity_id]) + "\n")
@@ -441,12 +581,15 @@ def prepare_loading_data(check_point):
                         # hyper_vertex -> (reverse_address, domain)
                         # domain -(Resolve)-> resolved_address
                         # reverse_address -(Reverse_Resolve)-> domain
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
-                            # allocate not exist
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -460,11 +603,14 @@ def prepare_loading_data(check_point):
 
                         # hyper_vertex -> (owner)
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
-                        if owner_graph_id == "" or owner_updated_nanosecond == 0:
-                            # allocate not exist
+                        if owner in address_alloc_dict:
+                            owner_graph_id = address_alloc_dict[owner]["graph_id"]
+                            owner_updated_nanosecond = address_alloc_dict[owner]["updated_nanosecond"]
+                        else:
                             owner_graph_id = str(uuid.uuid4())
                             owner_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([owner_graph_id, owner_graph_id, str(owner_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([owner_graph_id, owner_identity_id]) + "\n")
@@ -479,12 +625,15 @@ def prepare_loading_data(check_point):
                     elif owner == reverse_address and resolved_address != reverse_address:
                         # hyper_vertex -> (resolved_address, domain)
                         # domain -(Resolve)-> resolved_address
-                        if resolved_graph_id == "" or resolved_updated_nanosecond == 0:
-                            # allocate not exist
+                        if resolved_address in address_alloc_dict:
+                            resolved_graph_id = address_alloc_dict[resolved_address]["graph_id"]
+                            resolved_updated_nanosecond = address_alloc_dict[resolved_address]["updated_nanosecond"]
+                        else:
                             resolved_graph_id = str(uuid.uuid4())
                             resolved_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
-                            fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([resolved_identity_id, resolved_graph_id, "ethereum", resolved_address, str(resolved_updated_nanosecond)]) + "\n")
+                        fw_allocation.write("\t".join([domain_id, resolved_graph_id, "basenames", name, str(resolved_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([resolved_graph_id, resolved_graph_id, str(resolved_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([resolved_graph_id, resolved_identity_id]) + "\n")
@@ -496,11 +645,14 @@ def prepare_loading_data(check_point):
                         # hyper_vertex -> (reverse_address)
                         # owner -(Hold_Identity)-> domain, owner -(Hold_Contract)-> contract
                         # reverse_address -(Reverse_Resolve)-> domain
-                        if owner_graph_id == "" or owner_updated_nanosecond == 0:
-                            # allocate not exist
+                        if owner in address_alloc_dict:
+                            owner_graph_id = address_alloc_dict[owner]["graph_id"]
+                            owner_updated_nanosecond = address_alloc_dict[owner]["updated_nanosecond"]
+                        else:
                             owner_graph_id = str(uuid.uuid4())
                             owner_updated_nanosecond = get_unix_milliconds()
-                            fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
+
+                        fw_allocation.write("\t".join([owner_identity_id, owner_graph_id, "ethereum", owner, str(owner_updated_nanosecond)]) + "\n")
 
                         fw_identity_graph.write("\t".join([owner_graph_id, owner_graph_id, str(owner_updated_nanosecond)]) + "\n")
                         fw_hyper_edge.write("\t".join([owner_graph_id, owner_identity_id]) + "\n")
@@ -530,6 +682,7 @@ if __name__ == "__main__":
     config = setting.load_settings(env="development")
     logger.InitLogger(config)
 
-    check_point = 19246355
-    prepare_loading_data(check_point)
-    batch_update_allocation(check_point)
+    check_point = 19283520
+    # preallocate_address(check_point)
+    # prepare_loading_data(check_point)
+    # batch_update_allocation(check_point)

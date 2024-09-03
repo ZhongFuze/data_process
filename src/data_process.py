@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 15:15:26
+LastEditTime: 2024-09-03 18:52:00
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -44,8 +44,8 @@ def clusters_name_job():
 
 def basenames_job():
     logging.info("Starting basenames_job online fetch job...")
-    # check_point = 19240952
-    check_point = None
+    check_point = 19283520
+    # check_point = None
     BasenamesFetcher().online_dump(check_point)
 
 def ens_txlogs_offline_fetch():
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         )
 
         basenames_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="*", minute="1,30", second="1"
+            year="*", month="*", day="*", hour="*", minute="1,20,40", second="1"
         )
         scheduler.add_job(
             basenames_job,
