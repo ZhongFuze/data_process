@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-09-02 18:47:44
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 18:53:34
+LastEditTime: 2024-09-03 19:11:08
 FilePath: /data_process/src/script/db_loading_basenames.py
 Description: 
 '''
@@ -53,7 +53,7 @@ basenames_data_dirs = os.path.join(setting.Settings["datapath"], "basenames")
 # basenames.Resolve.csv
 # basenames.Reverse_Resolve.csv
 
-# header = ["id", "id", "updated_at"]
+# header = ["primary_id", "id", "updated_at"]
 # basenames.DomainCollection.csv
 
 # header = ["platform", "name", "tld", "status"]
@@ -266,11 +266,11 @@ def prepare_loading_data(check_point):
     fw_basenames.write("\t".join(header) + "\n")
 
     fw_domain_collection = open(os.path.join(check_point_dirs, "DomainCollection.csv"), "w", encoding="utf-8")
-    header = ["id", "id", "updated_at"]
+    header = ["primary_id", "id", "updated_at"]
     fw_domain_collection.write("\t".join(header) + "\n")
 
     fw_part_of_collection = open(os.path.join(check_point_dirs, "PartOfCollection.csv"), "w", encoding="utf-8")
-    header = ["platform", "name", "tld", "status"]
+    header = ["from", "to", "platform", "name", "tld", "status"]
     fw_part_of_collection.write("\t".join(header) + "\n")
 
     fw_identity_graph = open(os.path.join(check_point_dirs, "IdentitiesGraph.csv"), "w", encoding="utf-8")
@@ -378,7 +378,7 @@ def prepare_loading_data(check_point):
             collection_name = name.split(".")[0]
             collection_identity = [collection_name, collection_name, update_time]
             fw_domain_collection.write("\t".join(collection_identity) + "\n")
-            fw_part_of_collection.write("\t".join(["basenames", name, "base.eth", "taken"]) + "\n")
+            fw_part_of_collection.write("\t".join([collection_name, domain_id, "basenames", name, "base.eth", "taken"]) + "\n")
 
             basenames_contract_id = "base,0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5"
             if owner is not None:
