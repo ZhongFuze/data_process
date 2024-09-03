@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-26 16:40:00
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 18:45:44
+LastEditTime: 2024-09-03 17:08:37
 FilePath: /data_process/src/service/basenames_txlogs.py
 Description: basenames transactions logs fetch
 '''
@@ -35,10 +35,9 @@ from psycopg2.extras import execute_values, execute_batch
 import struct
 from eth_utils import decode_hex, to_text, to_checksum_address, encode_hex, keccak, to_bytes, to_hex, to_normalized_address
 
-
 import setting
 
-from .basenames_graphdb import BasenamesGraph
+from service.basenames_graphdb import BasenamesGraph
 
 # day seconds
 DAY_SECONDS = 24 * 60 * 60
@@ -1017,7 +1016,7 @@ class Fetcher():
             upsert_record[node]["is_registered"] = is_registered
 
         process_result = {
-            "block_datetime": block_datetime,
+            "block_datetime": str(block_datetime),
             "transaction_hash": transaction_hash,
             "upsert_data": upsert_data,
             "upsert_record": upsert_record,
@@ -1396,15 +1395,21 @@ class Fetcher():
                 process_result = self.transaction_process(sorted_group)
                 block_datetime = process_result["block_datetime"]
                 is_primary = process_result["is_primary"]
-                
+                is_registered = process_result["is_registered"]
                 # NOTICE: Upsert graph needs call before updating basenames registry table
                 # because some old states need to be record and modified
-                BasenamesGraph().save_tigergraph(process_result)
-                self.save_basenames(process_result["upsert_data"], cursor)
-                self.save_basenames_update_record(process_result["upsert_record"], cursor)
-                if is_primary:
-                    self.update_primary_name(process_result["set_name_record"], cursor)
-                # logging.debug("Basenames process transaction_hash {} Done".format(transaction_hash))
+                if is_registered is True:
+                    self.save_basenames(process_result["upsert_data"], cursor)
+                    self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                    if is_primary:
+                        self.update_primary_name(process_result["set_name_record"], cursor)
+                    BasenamesGraph().save_tigergraph(process_result)
+                else:
+                    BasenamesGraph().save_tigergraph(process_result)
+                    self.save_basenames(process_result["upsert_data"], cursor)
+                    self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                    if is_primary:
+                        self.update_primary_name(process_result["set_name_record"], cursor)
             except Exception as ex:
                 error_msg = traceback.format_exc()
                 base_ts = time.mktime(time.strptime(block_datetime, "%Y-%m-%d %H:%M:%S"))
@@ -1412,7 +1417,7 @@ class Fetcher():
                 failed_path = os.path.join(basenames_process, base_hour)
                 with open(failed_path, 'a+', encoding='utf-8') as fail:
                     fail.write("Basenames transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
-
+            # logging.debug("Basenames process transaction_hash {} Done".format(transaction_hash))
         logging.info("Basenames process from start_block={} to end_block={} transaction_hash record count={}, end_at={}".format(
             start_block, end_block, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
 
@@ -1430,6 +1435,59 @@ class Fetcher():
         record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
         record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
         return record_df
+
+    def read_records_by_hash(self, tx_hash, cursor):
+        ssql = """
+            SELECT block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded
+            FROM public.basenames_txlogs
+            WHERE transaction_hash='{}'
+        """
+        cursor.execute(ssql.format(tx_hash))
+        rows = cursor.fetchall()
+        columns = ['block_number', 'block_timestamp', 'transaction_hash', 'transaction_index', 'log_index', 
+               'contract_address', 'contract_label', 'method_id', 'signature', 'decoded']
+        record_df = pd.DataFrame(rows, columns=columns)
+        record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
+        record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
+        return record_df
+
+    def test_single_transaction(self, tx_hash):
+        '''
+        description: test_single_transaction.
+        '''
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        record_df = self.read_records_by_hash(tx_hash, cursor)
+        # Sort by block_timestamp
+        record_df = record_df.sort_values(by='block_timestamp')
+        # Group by transaction_hash
+        grouped = record_df.groupby('transaction_hash', sort=False)
+
+        for transaction_hash, group in grouped:
+            sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
+            try:
+                process_result = self.transaction_process(sorted_group)
+                block_datetime = process_result["block_datetime"]
+                is_primary = process_result["is_primary"]
+                is_registered = process_result["is_registered"]
+                # NOTICE: Upsert graph needs call before updating basenames registry table
+                # because some old states need to be record and modified
+                if is_registered is True:
+                    self.save_basenames(process_result["upsert_data"], cursor)
+                    self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                    if is_primary:
+                        self.update_primary_name(process_result["set_name_record"], cursor)
+                    BasenamesGraph().save_tigergraph(process_result)
+                else:
+                    BasenamesGraph().save_tigergraph(process_result)
+                    self.save_basenames(process_result["upsert_data"], cursor)
+                    self.save_basenames_update_record(process_result["upsert_record"], cursor)
+                    if is_primary:
+                        self.update_primary_name(process_result["set_name_record"], cursor)
+            except Exception as ex:
+                logging.exception(ex)
 
     def online_dump(self, check_point=None):
         '''
@@ -2002,6 +2060,36 @@ def hex_to_uint256(hex_value):
 
 
 if __name__ == '__main__':
+    import setting.filelogger as logger
+    config = setting.load_settings(env="development")
+    logger.InitLogger(config)
+
+    hash = "0xbfb10cbd6c2a633d3942b8ab491112048db03916c35f0bd222635e1a578c2cb3"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0xf43ea7064a2fec654c7c3184273451ee9b89e225ca30333539eff9934435e0cb"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0x0488074031177945bc91271f944672e1083fd7c1ea842740423c501add021c29"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0xa47b6083e0707e95605be9017851cd5fd6cf0d69cd09395bd4ea911fc2198f2a"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0x6ac681fa64778a2fbcbc7a1f9a23ae3b5d45ed7248408c28e3c3d80b0f908fae"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0xde2e4e6ee3d7bf6929923106f598fb7d750f135c21056eb9bfecef3248bfde83"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0x6b2ac162579651ea64ffea8747558d644ff8ab218cf05bfd9772525066bfbd79"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    hash = "0x9734a40217806ff28b7ac14295219d38e8c790190b9e2c213770c0f9b622758e"
+    Fetcher().test_single_transaction(tx_hash=hash)
+
+    exit()
+
     block_number = Fetcher().get_latest_block_from_rpc()
     print(f"Latest block_number: {block_number}")
 

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-09-02 18:47:44
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 23:42:01
+LastEditTime: 2024-09-03 16:19:08
 FilePath: /data_process/src/script/db_loading_basenames.py
 Description: 
 '''
@@ -19,9 +19,13 @@ if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
 import time
 import requests
 import json
+import math
 import uuid
 import logging
 import traceback
+
+import psycopg2
+from psycopg2.extras import execute_values, execute_batch
 
 import setting
 from script.flock import FileLock
@@ -63,53 +67,116 @@ def get_unix_milliconds():
     milliconds = int(current_time_seconds * 1e6)
     return milliconds
 
+def batch_update_allocation(check_point):
+    check_point_dirs = os.path.join(basenames_data_dirs, str(check_point))
+    alloc_path = os.path.join(check_point_dirs, "basenames_allocation.csv")
+    if not os.path.exists(alloc_path):
+        raise FileNotFoundError("Cannot find basenames_allocation.csv")
+
+    upsert_data = []
+    with open(alloc_path, "r", encoding="utf-8") as fr:
+        for line in fr:
+            line = line.rstrip()
+            item = line.split("\t")
+            # unique_id	graph_id	platform	identity	updated_nanosecond
+            upsert_data.append(
+                (item[0], item[1], item[2], item[3], int(item[4]))
+            )
+
+    sql_statement = """
+        INSERT INTO public.id_allocation (
+            unique_id,
+            graph_id,
+            platform,
+            identity,
+            platform,
+            updated_nanosecond
+        ) VALUES %s
+        ON CONFLICT (unique_id)
+        DO UPDATE SET
+            graph_id = EXCLUDED.graph_id,
+            updated_nanosecond = EXCLUDED.updated_nanosecond;
+    """
+    conn = psycopg2.connect(setting.PG_DSN["allocation"])
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        start = time.time()
+        logging.info("Batch update id_allocation start at: {}".format(
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
+
+        all_count = len(upsert_data)
+        per_count = 5000
+        times = math.ceil(all_count / per_count)
+        for i in range(times):
+            ss = i * per_count
+            ee = (i + 1) * per_count
+            batch_data = upsert_data[ss:ee]
+
+            if batch_data:
+                # execute_values(cursor, sql_statement, batch_data)
+                logging.info("Batch insert completed {} records.".format(len(batch_data)))
+            else:
+                logging.debug("No valid upsert_data to process.")
+
+        end = time.time()
+        logging.info("Batch update id_allocation cost: {}".format(end - start))
+        logging.info("Batch update id_allocation end at: {}".format(
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
+
+    except Exception as ex:
+        logging.error("Caught exception during insert")
+        raise ex
+    finally:
+        cursor.close()
+        conn.close()
 
 def prepare_loading_data(check_point):
     check_point_dirs = os.path.join(basenames_data_dirs, str(check_point))
     if not os.path.exists(check_point_dirs):
         os.makedirs(check_point_dirs)
 
-    fw_allocation = open(os.path.join(check_point_dirs, "%d.basenames_allocation.csv" % check_point), "w", encoding="utf-8")
-    header = ["unique_id", "graph_id", "platform", "identity", "updated_nanosecond"]
-    fw_allocation.write("\t".join(header) + "\n")
+    fw_allocation = open(os.path.join(check_point_dirs, "basenames_allocation.csv"), "w", encoding="utf-8")
+    # header = ["unique_id", "graph_id", "platform", "identity", "updated_nanosecond"]
+    # fw_allocation.write("\t".join(header) + "\n")
 
-    fw_ethereum = open(os.path.join(check_point_dirs, "%d.ethereum.Identities.csv" % check_point), "w", encoding="utf-8")
+    fw_ethereum = open(os.path.join(check_point_dirs, "ethereum.Identities.csv"), "w", encoding="utf-8")
     header = ["primary_id", "id", "uuid", "platform", "identity", "created_at", "added_at", "updated_at", "reverse"]
     fw_ethereum.write("\t".join(header) + "\n")
 
-    fw_basenames = open(os.path.join(check_point_dirs, "%d.basenames.Identities.csv" % check_point), "w", encoding="utf-8")
+    fw_basenames = open(os.path.join(check_point_dirs, "basenames.Identities.csv"), "w", encoding="utf-8")
     header = ["primary_id", "id", "uuid", "platform", "identity", "display_name", "created_at", "added_at", "updated_at", "expired_at", "reverse"]
     fw_basenames.write("\t".join(header) + "\n")
 
-    fw_domain_collection = open(os.path.join(check_point_dirs, "%d.DomainCollection.csv" % check_point), "w", encoding="utf-8")
+    fw_domain_collection = open(os.path.join(check_point_dirs, "DomainCollection.csv"), "w", encoding="utf-8")
     header = ["id", "id", "updated_at"]
     fw_domain_collection.write("\t".join(header) + "\n")
 
-    fw_part_of_collection = open(os.path.join(check_point_dirs, "%d.PartOfCollection.csv" % check_point), "w", encoding="utf-8")
+    fw_part_of_collection = open(os.path.join(check_point_dirs, "PartOfCollection.csv"), "w", encoding="utf-8")
     header = ["platform", "name", "tld", "status"]
     fw_part_of_collection.write("\t".join(header) + "\n")
 
-    fw_identity_graph = open(os.path.join(check_point_dirs, "%d.IdentitiesGraph.csv" % check_point), "w", encoding="utf-8")
+    fw_identity_graph = open(os.path.join(check_point_dirs, "IdentitiesGraph.csv"), "w", encoding="utf-8")
     header = ["primary_id", "id", "updated_nanosecond"]
     fw_identity_graph.write("\t".join(header) + "\n")
 
-    fw_hyper_edge = open(os.path.join(check_point_dirs, "%d.PartOfIdentitiesGraph_Reverse.csv" % check_point), "w", encoding="utf-8")
+    fw_hyper_edge = open(os.path.join(check_point_dirs, "PartOfIdentitiesGraph_Reverse.csv"), "w", encoding="utf-8")
     header = ["from", "to"]
     fw_hyper_edge.write("\t".join(header) + "\n")
 
-    fw_hold_identity = open(os.path.join(check_point_dirs, "%d.Hold_Identity.csv" % check_point), "w", encoding="utf-8")
+    fw_hold_identity = open(os.path.join(check_point_dirs, "Hold_Identity.csv"), "w", encoding="utf-8")
     header = ["from", "to", "source", "uuid", "id", "created_at", "updated_at", "fetcher", "expired_at"]
     fw_hold_identity.write("\t".join(header) + "\n")
 
-    fw_hold_contract = open(os.path.join(check_point_dirs, "%d.Hold_Contract.csv" % check_point), "w", encoding="utf-8")
+    fw_hold_contract = open(os.path.join(check_point_dirs, "Hold_Contract.csv"), "w", encoding="utf-8")
     header = ["from", "to", "source", "uuid", "id", "created_at", "updated_at", "fetcher", "expired_at"]
     fw_hold_contract.write("\t".join(header) + "\n")
 
-    fw_resolve = open(os.path.join(check_point_dirs, "%d.Resolve.csv" % check_point), "w", encoding="utf-8")
+    fw_resolve = open(os.path.join(check_point_dirs, "Resolve.csv"), "w", encoding="utf-8")
     header = ["from", "to", "source", "system", "name", "uuid", "updated_at", "fetcher"]
     fw_resolve.write("\t".join(header) + "\n")
 
-    fw_reverse_resolve = open(os.path.join(check_point_dirs, "%d.Reverse_Resolve.csv" % check_point), "w", encoding="utf-8")
+    fw_reverse_resolve = open(os.path.join(check_point_dirs, "Reverse_Resolve.csv"), "w", encoding="utf-8")
     header = ["from", "to", "source", "system", "name", "uuid", "updated_at", "fetcher"]
     fw_reverse_resolve.write("\t".join(header) + "\n")
 
@@ -178,13 +245,13 @@ def prepare_loading_data(check_point):
             if reverse_addr != "":
                 reverse_address = reverse_addr
 
-            # `resolved_address` is missing, set `resolved_address` equal to reverse_address
-            if owner is not None and resolved_address is None and reverse_address is not None:
-                resolved_address = reverse_address
-
             # `resolved_address` is missing, but resolver is L2 Resolver, set `resolved_address` equal to owner
             if owner is not None and resolver is not None and resolved_address is None:
                 resolved_address = owner
+
+            # `resolved_address` is missing, set `resolved_address` equal to reverse_address
+            if owner is not None and resolved_address is None and reverse_address is not None:
+                resolved_address = reverse_address
 
             domain_id = "basenames,{}".format(name)
             domain_identity = [domain_id, domain_id, str(uuid.uuid4()), "basenames", name, name, registration_time, update_time, update_time, expire_time, str(reverse)]
@@ -465,3 +532,4 @@ if __name__ == "__main__":
 
     check_point = 19246355
     prepare_loading_data(check_point)
+    batch_update_allocation(check_point)

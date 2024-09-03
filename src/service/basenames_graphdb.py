@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 22:41:01
+LastEditTime: 2024-09-03 17:26:54
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -292,6 +292,7 @@ class BasenamesGraph():
         reverse_node_bytes = to_bytes(hexstr=base_reverse_node)
         reverse_node = keccak(reverse_node_bytes + label_hash)
         reverse_node = encode_hex(reverse_node)
+
         try:
             this_conn = psycopg2.connect(setting.PG_DSN["ens"])
             this_conn.autocommit = True
@@ -354,7 +355,7 @@ class BasenamesGraph():
         reverse_name = None
         reverse = False
         expired_at = "1970-01-01 00:00:00"
-
+        logging.info("tigergraph mint: {}, {}".format(block_datetime, upsert_data))
         for namenode, record in upsert_data.items():
             _name = record.get("name", None)
             if _name is not None and _name != "":
@@ -390,14 +391,17 @@ class BasenamesGraph():
             else:
                 # if name is not exist
                 continue
-        
-        # `resolved_address` is missing, set `resolved_address` equal to reverse_address
-        if owner is not None and reverse_address is None and reverse_address is not None:
-            resolved_address = reverse_address
 
-        # # `resolved_address` is missing, but resolver is L2 Resolver, set `resolved_address` equal to owner
+        if base_name is None:
+            return
+
+        # `resolved_address` is missing, but resolver is L2 Resolver, set `resolved_address` equal to owner
         if owner is not None and resolver is not None and resolved_address is None:
             resolved_address = owner
+
+        # `resolved_address` is missing, set `resolved_address` equal to reverse_address
+        if owner is not None and resolved_address is None and reverse_address is not None:
+            resolved_address = reverse_address
 
         vertices = []
         edges = []
@@ -427,6 +431,32 @@ class BasenamesGraph():
             "symbol": {"value": "Basenames"},
             "updated_at": {"value": updated_at, "op": "max"}
         }
+
+        if owner is not None:
+            collection_name = base_name.split('.')[0]
+            collection_identity = {
+                "id": {"value": collection_name, "op": "ignore_if_exists"},
+                "updated_at": {"value": block_datetime, "op": "max"}
+            }
+            vertices.append(Vertex(
+                vertex_id=collection_identity["id"]["value"],
+                vertex_type="DomainCollection",
+                attributes=collection_identity
+            ))
+            collection_edge = {
+                "platform": {"value": "basenames"},
+                "name": {"value": base_name},
+                "tld": {"value": "base.eth"},
+                "status": {"value": "taken"},
+            }
+            edges.append(Edge(
+                edge_type="PartOfCollection",
+                from_id=collection_identity["id"]["value"],
+                from_type="DomainCollection",
+                to_id=domain_identity["id"]["value"],
+                to_type="Identities",
+                attributes=collection_edge
+            ))
 
         # DISCRIMINATOR(source STRING)
         # DISCRIMINATOR(source STRING, transaction STRING, id STRING)
@@ -771,6 +801,7 @@ class BasenamesGraph():
         self.upsert_graph(vertices, edges)
 
     def change_owner(self, block_datetime, upsert_data):
+        logging.info("tigergraph change_owner: {}, {}".format(block_datetime, upsert_data))
         for namenode, record in upsert_data.items():
             new_owner = record.get("owner", None)
             if new_owner is None:
@@ -864,6 +895,18 @@ class BasenamesGraph():
                 "fetcher": {"value": "data_service"},
                 "expired_at": {"value": expired_at, "op": "max"},
             }
+            vids = [owner_identity["id"]["value"]]
+            allocate_res = self.call_allocation(vids)
+            hv_id = allocate_res["return_graph_id"]
+            hv = {
+                "id": {"value": hv_id, "op": "ignore_if_exists"},
+                "updated_nanosecond": {"value": allocate_res["return_updated_nanosecond"], "op": "ignore_if_exists"}
+            }
+            vertices.append(Vertex(
+                vertex_id=hv["id"]["value"],
+                vertex_type="IdentitiesGraph",
+                attributes=hv
+            ))
             vertices.append(Vertex(
                 vertex_id=owner_identity["id"]["value"],
                 vertex_type="Identities",
@@ -873,6 +916,14 @@ class BasenamesGraph():
                 vertex_id=domain_identity["id"]["value"],
                 vertex_type="Identities",
                 attributes=domain_identity
+            ))
+            edges.append(Edge(
+                edge_type="PartOfIdentitiesGraph_Reverse",
+                from_id=hv["id"]["value"],
+                from_type="IdentitiesGraph",
+                to_id=owner_identity["id"]["value"],
+                to_type="Identities",
+                attributes={}
             ))
             edges.append(Edge(
                 edge_type="Hold_Identity",
@@ -899,7 +950,8 @@ class BasenamesGraph():
         #             "60": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
         #         },
         #         "resolved_address": "0x224142b1c24b8ff0f1a2309ad85e0272dc5b06f0"
-        #     },
+        #     }
+        logging.info("tigergraph change_resolved_address: {}, {}".format(block_datetime, upsert_data))
         for namenode, record in upsert_data.items():
             new_address = record.get("resolved_address", None)
             if new_address is None:
@@ -924,6 +976,7 @@ class BasenamesGraph():
             domain_id = "basenames,{}".format(base_name)
             resolve_discriminator = "basenames,basenames,{}".format(base_name) # source:system:name
 
+            # call unallocation for basenames_domain
             unallocation_map = self.call_unallocation([domain_id])
             old_graph_id = unallocation_map.get(domain_id, "")
             if old_address is not None:
@@ -1024,6 +1077,7 @@ class BasenamesGraph():
             self.upsert_graph(vertices, edges)
 
     def change_reverse_address(self, block_datetime, upsert_data):
+        logging.info("tigergraph change_reverse_address: {}, {}".format(block_datetime, upsert_data))
         for namenode, record in upsert_data.items():
             reverse_address = record.get("reverse_address", None)
             if reverse_address is None:
@@ -1055,6 +1109,10 @@ class BasenamesGraph():
                 if base_name is not None:
                     if base_name.endswith("base.eth"):
                         old_base_name = base_name
+
+            if old_base_name is not None and new_base_name is not None:
+                if old_base_name == new_base_name:
+                    continue
 
             if old_base_name is not None:
                 old_name_id = "basenames,{}".format(old_base_name)
@@ -1138,27 +1196,30 @@ class BasenamesGraph():
         }
         return {*}
         '''
-        transaction_hash = processed_data["transaction_hash"]
-        is_primary = processed_data["is_primary"]
-        is_change_owner = processed_data["is_change_owner"]
-        is_change_resolved = processed_data["is_change_resolved"]
-        is_registered = processed_data["is_registered"]
-        block_datetime = processed_data["block_datetime"]
-        upsert_data = processed_data["upsert_data"]
+        try:
+            transaction_hash = processed_data["transaction_hash"]
+            is_primary = processed_data["is_primary"]
+            is_change_owner = processed_data["is_change_owner"]
+            is_change_resolved = processed_data["is_change_resolved"]
+            is_registered = processed_data["is_registered"]
+            block_datetime = processed_data["block_datetime"]
+            upsert_data = processed_data["upsert_data"]
 
-        logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
-        if is_registered:
-            self.mint(block_datetime, upsert_data)
-        else:
-            if is_change_owner:
-                self.change_owner(block_datetime, upsert_data)
+            logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
+            if is_registered:
+                self.mint(block_datetime, upsert_data)
+            else:
+                if is_change_owner:
+                    self.change_owner(block_datetime, upsert_data)
 
-            if is_change_resolved:
-                self.change_resolved_address(block_datetime, upsert_data)
+                if is_change_resolved:
+                    self.change_resolved_address(block_datetime, upsert_data)
 
-        # update reverse_address -> primary_name
-        if is_primary:
-            self.change_reverse_address(block_datetime, upsert_data)
+            # update reverse_address -> primary_name
+            if is_primary:
+                self.change_reverse_address(block_datetime, upsert_data)
+        except Exception as ex:
+            logging.exception(ex)
 
 
 if __name__ == "__main__":
