@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-08-30 22:09:23
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 17:26:54
+LastEditTime: 2024-09-03 17:36:21
 FilePath: /data_process/src/service/basenames_graphdb.py
 Description: 
 '''
@@ -1196,13 +1196,14 @@ class BasenamesGraph():
         }
         return {*}
         '''
+        transaction_hash = processed_data["transaction_hash"]
+        block_datetime = processed_data["block_datetime"]
         try:
-            transaction_hash = processed_data["transaction_hash"]
             is_primary = processed_data["is_primary"]
             is_change_owner = processed_data["is_change_owner"]
             is_change_resolved = processed_data["is_change_resolved"]
             is_registered = processed_data["is_registered"]
-            block_datetime = processed_data["block_datetime"]
+            
             upsert_data = processed_data["upsert_data"]
 
             logging.info("Processing {} {} to TigergraphDB...".format(block_datetime, transaction_hash))
@@ -1219,7 +1220,11 @@ class BasenamesGraph():
             if is_primary:
                 self.change_reverse_address(block_datetime, upsert_data)
         except Exception as ex:
+            error_msg = traceback.format_exc()
             logging.exception(ex)
+            raise Exception("save_tigergraph block_datetime = {}, transaction_hash={}, occurs error={}".format(
+                block_datetime, transaction_hash, error_msg
+            ))
 
 
 if __name__ == "__main__":
