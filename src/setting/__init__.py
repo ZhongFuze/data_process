@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:52:24
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-02 05:16:09
+LastEditTime: 2024-09-03 15:03:29
 FilePath: /data_process/src/setting/__init__.py
 Description: load configurations and global setting
 '''
@@ -144,6 +144,7 @@ def load_dsn(config_file):
             "firefly": config["pg_dsn"]["firefly"],
             "clusters": config["pg_dsn"]["clusters"],
             "ens": config["pg_dsn"]["ens"],
+            "allocation": config["pg_dsn"]["allocation"],
         }
         return pg_dsn_settings
     except Exception as ex:

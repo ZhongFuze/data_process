@@ -15,14 +15,17 @@ gnosis = "postgresql://postgres:password@host/dbname"
 firefly = "postgresql://postgres:password@host/dbname"
 clusters = "postgresql://postgres:password@host/dbname"
 ens = "postgresql://postgres:password@host/dbname"
+allocation = "postgresql://postgres:password@host/dbname"
 
 [id_allocation]
 url = "http://id_allocation_hostname"
 
 [tdb]
 host = "http://tigergraph_hostname"
+inner_port = "inner_port"
+restpp = "restpp"
 username = "tigergraph"
-password = "tigergraph"
+password = "password"
 social_graph_name = "graph_name"
 social_graph_token = "01234567abcdefgh01234567abcdefgh"
 
