@@ -1,9 +1,9 @@
 CREATE LOADING JOB Load_Basenames FOR GRAPH SocialGraph {
 LOAD "/home/tigergraph/shared_data/basenames/ethereum.Identities.csv"
-    TO VERTEX Identities VALUES ($"primary_id", $"id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", _, _, _, REDUCE(min($"created_at")), REDUCE(min($"added_at")), REDUCE(max($"updated_at")), _, _, REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+    TO VERTEX Identities VALUES ($"primary_id", $"id", $"uuid", $"platform", $"identity", _, _, _, $"created_at", $"added_at", REDUCE(max($"updated_at")), _, _, REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
 LOAD "/home/tigergraph/shared_data/basenames/basenames.Identities.csv"
-    TO VERTEX Identities VALUES ($"primary_id", $"id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", _, _, REDUCE(min($"created_at")), REDUCE(min($"added_at")), REDUCE(max($"updated_at")), _, REDUCE(max($"expired_at")), REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+    TO VERTEX Identities VALUES ($"primary_id", $"id", $"uuid", $"platform", $"identity", $"display_name", _, _, $"created_at", $"added_at", REDUCE(max($"updated_at")), _, REDUCE(max($"expired_at")), REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
 LOAD "/home/tigergraph/shared_data/basenames/IdentitiesGraph.csv"
     TO VERTEX IdentitiesGraph VALUES ($"primary_id", $"id", $"updated_nanosecond") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";

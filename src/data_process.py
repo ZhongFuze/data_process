@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 18:52:00
+LastEditTime: 2024-09-05 16:34:08
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -49,14 +49,18 @@ def basenames_job():
     BasenamesFetcher().online_dump(check_point)
 
 def ens_txlogs_offline_fetch():
-    start_date = "2020-02-04"
-    end_date = "2021-12-31"
+    # start_date = "2020-02-04"
+    # end_date = "2021-12-31"
+    start_date = "2024-07-19"
+    end_date = "2024-09-04"
     logging.info("Starting ens_txlogs_offline_fetch job...")
     ENSLogFetcher().offline_dump(start_date, end_date)
 
 def ens_txlogs_offline_dump_to_db():
+    start_date = "2024-07-20"
+    end_date = "2024-09-04"
     logging.info("Starting ens_txlogs_offline_dump_to_db job...")
-    ENSLogFetcher().offline_dump_to_db()
+    ENSLogFetcher().offline_dump_to_db(start_date, end_date)
 
 def basenames_txlogs_dump_to_db():
     start_date = "2024-07-26"
@@ -115,7 +119,7 @@ if __name__ == "__main__":
         )
 
         basenames_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="*", minute="1,20,40", second="1"
+            year="*", month="*", day="*", hour="*", minute="1,31", second="1"
         )
         scheduler.add_job(
             basenames_job,
@@ -127,6 +131,7 @@ if __name__ == "__main__":
         # basenames_offline_process()
         # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_dump_to_db()
+        ens_txlogs_offline_fetch()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

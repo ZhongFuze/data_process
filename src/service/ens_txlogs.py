@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-17 16:29:30
+LastEditTime: 2024-09-05 16:19:05
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -694,18 +694,16 @@ class Fetcher():
         description: loadings data split by date between start and end
         '''
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
-        # dates = self.date_range(start_date, end_date)
-        # for date in dates:
-        #     self.daily_fetch(date)
-        #     self.daily_fetch_supplement(date)
-        base_failed_dates = ["2020-06-30", "2020-07-01", "2020-07-02", "2020-07-03", "2020-07-04", "2020-07-08", "2020-07-11", "2020-08-24", "2020-08-25", "2020-08-27", "2020-10-20", "2021-11-09", "2022-05-16", "2022-09-17"]
-        supplement_failed_dates = ["2022-03-19", "2022-03-31", "2022-05-02", "2022-05-19", "2022-05-21", "2022-05-23", "2022-08-14", "2022-10-01", "2022-10-22", "2022-12-09", "2022-12-11"]
-
-        for date in base_failed_dates:
+        dates = self.date_range(start_date, end_date)
+        for date in dates:
             self.daily_fetch(date)
-
-        for date in supplement_failed_dates:
             self.daily_fetch_supplement(date)
+        # base_failed_dates = ["2020-06-30", "2020-07-01", "2020-07-02", "2020-07-03", "2020-07-04", "2020-07-08", "2020-07-11", "2020-08-24", "2020-08-25", "2020-08-27", "2020-10-20", "2021-11-09", "2022-05-16", "2022-09-17"]
+        # supplement_failed_dates = ["2022-03-19", "2022-03-31", "2022-05-02", "2022-05-19", "2022-05-21", "2022-05-23", "2022-08-14", "2022-10-01", "2022-10-22", "2022-12-09", "2022-12-11"]
+        # for date in base_failed_dates:
+        #     self.daily_fetch(date)
+        # for date in supplement_failed_dates:
+        #     self.daily_fetch_supplement(date)
 
     def insert_supplement(self, date):
         conn = psycopg2.connect(setting.PG_DSN["ens"])
@@ -779,16 +777,13 @@ class Fetcher():
         else:
             logging.debug("No valid create_data to process.")
 
-    def offline_dump_to_db(self):
+    def offline_dump_to_db(self, start_date, end_date):
         '''
         description: loadings data to database
         '''
         conn = psycopg2.connect(setting.PG_DSN["ens"])
         conn.autocommit = True
         cursor = conn.cursor()
-
-        start_date = "2020-02-04"
-        end_date = "2024-07-19"
 
         start = time.time()
         logging.info("loading ENS offline data to db start at: {}".format(
