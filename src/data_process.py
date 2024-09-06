@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-05 16:34:08
+LastEditTime: 2024-09-06 18:33:55
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -28,6 +28,9 @@ from service.clusters_name import Fetcher as ClustersNameFetcher
 from service.ens_txlogs import Fetcher as ENSLogFetcher
 from service.basenames_txlogs import Fetcher as BasenamesFetcher
 
+allow_basenames_checkpoint = True
+
+
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
     GnosisDomainsFetcher().online_dump()
@@ -43,10 +46,17 @@ def clusters_name_job():
     ClustersNameFetcher().online_dump()
 
 def basenames_job():
-    logging.info("Starting basenames_job online fetch job...")
-    check_point = 19283520
-    # check_point = None
-    BasenamesFetcher().online_dump(check_point)
+    global allow_basenames_checkpoint
+    check_point = None
+    if allow_basenames_checkpoint is True:
+        check_point = 19413725
+        logging.info("Starting basenames_job(check_point={}) online fetch job...".format(check_point))
+        BasenamesFetcher().online_dump(check_point)
+        check_point = None
+        allow_basenames_checkpoint = False
+    else:
+        logging.info("Starting basenames_job online fetch job...")
+        BasenamesFetcher().online_dump(check_point=None)
 
 def ens_txlogs_offline_fetch():
     # start_date = "2020-02-04"
@@ -131,7 +141,7 @@ if __name__ == "__main__":
         # basenames_offline_process()
         # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_dump_to_db()
-        ens_txlogs_offline_fetch()
+        # ens_txlogs_offline_fetch()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

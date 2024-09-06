@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-09-02 18:47:44
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-03 19:11:08
+LastEditTime: 2024-09-06 18:25:43
 FilePath: /data_process/src/script/db_loading_basenames.py
 Description: 
 '''
@@ -682,7 +682,7 @@ if __name__ == "__main__":
     config = setting.load_settings(env="development")
     logger.InitLogger(config)
 
-    check_point = 19283520
+    check_point = 19413725
     # preallocate_address(check_point)
     # prepare_loading_data(check_point)
-    # batch_update_allocation(check_point)
+    batch_update_allocation(check_point)
