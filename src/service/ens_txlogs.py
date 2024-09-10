@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-12 22:15:01
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-05 16:19:05
+LastEditTime: 2024-09-10 11:49:59
 FilePath: /data_process/src/service/ens_txlogs.py
 Description: ens transactions logs fetch
 '''
@@ -695,6 +695,7 @@ class Fetcher():
         '''
         logging.info(f"loading ENS offline data between {start_date} and {end_date}")
         dates = self.date_range(start_date, end_date)
+        dates.insert(0, "2024-07-22")
         for date in dates:
             self.daily_fetch(date)
             self.daily_fetch_supplement(date)

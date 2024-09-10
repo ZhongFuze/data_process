@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-26 19:00:20
+LastEditTime: 2024-09-10 13:02:40
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -35,6 +35,8 @@ from psycopg2.extras import execute_values, execute_batch
 from eth_utils import encode_hex, keccak, to_bytes
 
 import setting
+
+INITIALIZE_BLOCK_NUMBER = 9456662
 
 
 filter_contract_map = {
@@ -896,7 +898,39 @@ class Worker():
     def __init__(self):
         pass
     # def save_ens_decoded_to_storage(self, data, cursor):
-    #     # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expire_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,key_value,update_time
+    #     # id,namenode,name,label,erc721_token_id,erc1155_token_id,parent_node,registration_time,expire_time,is_wrapped,fuses,grace_period_ends,owner,resolver,resolved_address,resolved_records,reverse_address,contenthash,texts,update_time
+
+    def update_primary_name(self, set_name_record, cursor):
+        for reverse_node, record in set_name_record.items():
+            reverse_address = record.get("reverse_address", "")
+            name = record.get("name", "")
+            namenode = record.get("namenode", "")
+            if reverse_address == "" or namenode == "":
+                continue
+
+            # logging.debug("Basenames set_name[addr={},reverse_node={}] -> name={}, node={}".format(
+            #     reverse_address, reverse_node, name, namenode))
+
+            # set all record with has reverse_address = {{reverse_address}}
+            # it's is_primary = False
+            # then set particular namenode and reverse_node reverse_address is_primary = True
+            reset_primary_sql = f"""
+                UPDATE ens_name SET is_primary = false, reverse_address = null WHERE reverse_address = '{reverse_address}'
+            """
+            try:
+                cursor.execute(reset_primary_sql)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during reset primary_name in {}, sql={}".format(error_msg, reset_primary_sql))
+
+            update_primary_sql = f"""
+                UPDATE ens_name SET is_primary = true, reverse_address = '{reverse_address}' WHERE namenode = '{namenode}' OR namenode = '{reverse_node}'
+            """
+            try:
+                cursor.execute(update_primary_sql)
+            except Exception as ex:
+                error_msg = traceback.format_exc()
+                raise Exception("Caught exception during update primary_name in {}, sql={}".format(error_msg, update_primary_sql))
 
     def save_ens_decoded_to_storage(self, data, cursor):
         """
@@ -912,6 +946,7 @@ class Worker():
 
             field_mapping = {
                 "name": "name",
+                "label_name": "label_name",
                 "label": "label",
                 "erc721_token_id": "erc721_token_id",
                 "erc1155_token_id": "erc1155_token_id",
@@ -928,13 +963,13 @@ class Worker():
                 "contenthash": "contenthash",
                 "update_time": "update_time",
                 "resolved_records": "resolved_records",  # JSONB
-                "key_value": "key_value"  # JSONB
+                "texts": "texts"  # JSONB
             }
 
             jsonb_update = []
             for key, field in field_mapping.items():
                 if key in record:
-                    if key in ["resolved_records", "key_value"]:
+                    if key in ["resolved_records", "texts"]:
                         kv_fields = []
                         for k, v in record[key].items():
                             vv = quote(v, 'utf-8')  # convert string to url-encoded
@@ -988,8 +1023,9 @@ class Worker():
             is_new_registered,
             update_record
         ) VALUES %s
-        ON CONFLICT (namenode, transaction_hash, log_count)
+        ON CONFLICT (namenode, transaction_hash)
         DO UPDATE SET
+            log_count = EXCLUDED.log_count,
             is_registered = EXCLUDED.is_registered,
             is_old_registered = EXCLUDED.is_old_registered,
             is_new_registered = EXCLUDED.is_new_registered,
@@ -1019,6 +1055,8 @@ class Worker():
         '''
         upsert_record = {}
         upsert_data = {}
+        set_name_record = {}
+
         is_ignore = False
         is_registered = False
         is_old_registered = False
@@ -1041,7 +1079,7 @@ class Worker():
 
             if method_id in ignore_method:
                 # TODO: if ignore_method in transaction_hash, save or debug
-                print(f"Ignore this transaction block_datetime {block_datetime} transaction_hash {transaction_hash} ignore method {signature}")
+                logging.warn(f"Ignore this transaction block_datetime {block_datetime} transaction_hash {transaction_hash} ignore method {signature}")
                 is_ignore = True
                 break
 
@@ -1075,6 +1113,7 @@ class Worker():
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label_name"] = ens_name.split(".")[0]
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
@@ -1099,6 +1138,7 @@ class Worker():
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label_name"] = ens_name.split(".")[0]
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
@@ -1132,10 +1172,18 @@ class Worker():
                 upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                 upsert_data[reverse_node]["reverse_address"] = reverse_address
 
+                if reverse_node not in set_name_record:
+                    set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                set_name_record[reverse_node]["name"] = ens_name
+                set_name_record[reverse_node]["namenode"] = node
+                set_name_record[reverse_node]["reverse_node"] = reverse_node
+                set_name_record[reverse_node]["reverse_address"] = reverse_address
+
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label_name"] = ens_name.split(".")[0]
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
@@ -1178,6 +1226,11 @@ class Worker():
                 upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                 upsert_data[reverse_node]["reverse_address"] = reverse_address
 
+                if reverse_node not in set_name_record:
+                    set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                set_name_record[reverse_node]["reverse_node"] = reverse_node
+                set_name_record[reverse_node]["reverse_address"] = reverse_address
+
                 if reverse_node not in upsert_record:
                     upsert_record[reverse_node] = {
                         "block_timestamp": unix_string_to_datetime(block_unix),
@@ -1198,11 +1251,19 @@ class Worker():
                         upsert_data[node] = {"namenode": node}
                     upsert_data[node]["namenode"] = node
                     upsert_data[node]["name"] = ens_name
+                    upsert_data[node]["label_name"] = ens_name.split(".")[0]
                     upsert_data[node]["label"] = label
                     upsert_data[node]["erc721_token_id"] = erc721_token_id
                     upsert_data[node]["erc1155_token_id"] = erc1155_token_id
                     upsert_data[node]["parent_node"] = parent_node
                     upsert_data[node]["reverse_address"] = reverse_address
+
+                    if reverse_node not in set_name_record:
+                        set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                    set_name_record[reverse_node]["reverse_node"] = reverse_node
+                    set_name_record[reverse_node]["reverse_address"] = reverse_address
+                    set_name_record[reverse_node]["name"] = ens_name
+                    set_name_record[reverse_node]["namenode"] = node
 
                     if node not in upsert_record:
                         upsert_record[node] = {
@@ -1213,6 +1274,22 @@ class Worker():
                         }
                     upsert_record[node]["update_record"][log_index] = {
                         "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
+
+                if reverse_node not in set_name_record:
+                    set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                set_name_record[reverse_node]["reverse_node"] = reverse_node
+                set_name_record[reverse_node]["name"] = ens_name
+                set_name_record[reverse_node]["namenode"] = node
+
+                if reverse_node not in upsert_record:
+                    upsert_record[reverse_node] = {
+                        "block_timestamp": unix_string_to_datetime(block_unix),
+                        "namenode": reverse_node,
+                        "transaction_hash": transaction_hash,
+                        "update_record": {}
+                    }
+                upsert_record[reverse_node]["update_record"][log_index] = {
+                    "signature": signature, "upsert_data": copy.deepcopy(upsert_data[reverse_node])}
 
             elif method_id == NAME_RENEWED_UINT:
                 node, label, erc721_token_id, erc1155_token_id, expire_time = NameRenewedID(decoded_str)
@@ -1237,6 +1314,7 @@ class Worker():
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label_name"] = ens_name.split(".")[0]
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
@@ -1257,9 +1335,9 @@ class Worker():
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 if texts_key != "":
-                    if "key_value" not in upsert_data[node]:
-                        upsert_data[node]["key_value"] = {}
-                    upsert_data[node]["key_value"][texts_key] = ""
+                    if "texts" not in upsert_data[node]:
+                        upsert_data[node]["texts"] = {}
+                    upsert_data[node]["texts"][texts_key] = ""
 
                 if node not in upsert_record:
                     upsert_record[node] = {
@@ -1276,9 +1354,9 @@ class Worker():
                 if node not in upsert_data:
                     upsert_data[node] = {"namenode": node}
                 if texts_key != "":
-                    if "key_value" not in upsert_data[node]:
-                        upsert_data[node]["key_value"] = {}
-                    upsert_data[node]["key_value"][texts_key] = texts_val
+                    if "texts" not in upsert_data[node]:
+                        upsert_data[node]["texts"] = {}
+                    upsert_data[node]["texts"][texts_key] = texts_val
 
                 if node not in upsert_record:
                     upsert_record[node] = {
@@ -1346,6 +1424,7 @@ class Worker():
                     "signature": signature, "upsert_data": copy.deepcopy(upsert_data[node])}
 
                 if is_reverse is True:
+                    reverse_claim = True
                     # update reverse_address in `NewOwner`
                     reverse_address = owner
                     reverse_label, reverse_node = compute_label_and_node(reverse_address)
@@ -1364,6 +1443,11 @@ class Worker():
                     upsert_data[reverse_node]["expire_time"] = "1970-01-01 00:00:00"
                     upsert_data[reverse_node]["registration_time"] = unix_string_to_datetime(block_unix)
                     upsert_data[reverse_node]["reverse_address"] = reverse_address
+
+                    if reverse_node not in set_name_record:
+                        set_name_record[reverse_node] = {"reverse_node": reverse_node}
+                    set_name_record[reverse_node]["reverse_node"] = reverse_node
+                    set_name_record[reverse_node]["reverse_address"] = reverse_address
 
                     if reverse_node not in upsert_record:
                         upsert_record[reverse_node] = {
@@ -1501,6 +1585,7 @@ class Worker():
                     upsert_data[node] = {"namenode": node}
                 upsert_data[node]["namenode"] = node
                 upsert_data[node]["name"] = ens_name
+                upsert_data[node]["label_name"] = ens_name.split(".")[0]
                 upsert_data[node]["label"] = label
                 upsert_data[node]["erc721_token_id"] = erc721_token_id
                 upsert_data[node]["erc1155_token_id"] = erc1155_token_id
@@ -1608,9 +1693,19 @@ class Worker():
                             owner = upsert_data[node]["owner"]
                             upsert_data[node]["reverse_address"] = owner
 
-        if is_ignore is True:
-            return {}, {}
-        return upsert_data, upsert_record
+        # if is_ignore is True:
+        #     return str(block_datetime), {}, {}
+        # return str(block_datetime), upsert_data, upsert_record
+        process_result = {
+            "is_ignore": is_ignore,
+            "block_datetime": str(block_datetime),
+            "transaction_hash": transaction_hash,
+            "upsert_data": upsert_data,
+            "upsert_record": upsert_record,
+            "is_primary": reverse_claim,
+            "set_name_record": set_name_record,
+        }
+        return process_result
 
     def daily_read_storage(self, date, cursor):
         return []
@@ -1625,19 +1720,19 @@ class Worker():
         record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
         return record_df
 
-    def pipeline(self, date):
-        conn = psycopg2.connect(setting.PG_DSN["ens"])
-        conn.autocommit = True
-        cursor = conn.cursor()
+    def pipeline(self, cursor, start_block, end_block):
+        ens_process = os.path.join(setting.Settings["datapath"], "ens_process")
+        if not os.path.exists(ens_process):
+            os.makedirs(ens_process)
 
-        failed_path = "/Users/fuzezhong/Documents/GitHub/zhongfuze/data_process/data/ens_decoded_failed/{}.log".format(date)
-        record_df = self.daily_read_test(date)
+        block_datetime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+        record_df = self.read_records_by_block(cursor, start_block, end_block)
         # Sort by block_timestamp
         record_df = record_df.sort_values(by='block_timestamp')
         # Group by transaction_hash
         grouped = record_df.groupby('transaction_hash', sort=False)
-        print(len(grouped))
-        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        logging.info("ENS process from start_block={} to end_block={} transaction_hash record count={}, start_at={}".format(
+            start_block, end_block, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
         for transaction_hash, group in grouped:
             # Sort transaction_index and log_index
             # if transaction_hash == "0x18a548144371310fd0489677f3fe3ab5313fdb9eca83292c570e65b97e54f17c":
@@ -1648,70 +1743,151 @@ class Worker():
             #     self.save_ens_decoded_to_storage(upsert_data, cursor)
             #     break
             sorted_group = group.sort_values(by=['transaction_index', 'log_index'])
-            length = len(sorted_group)
-            print(transaction_hash, length)
             try:
-                upsert_data, upsert_record = self.transaction_process(sorted_group)
+                process_result = self.transaction_process(sorted_group)
+                is_ignore = process_result["is_ignore"]
+                if is_ignore is True:
+                    continue
+                
+                is_primary = process_result["is_primary"]
+                block_datetime = process_result["block_datetime"]
+                upsert_data = process_result["upsert_data"]
+                upsert_record = process_result["upsert_record"]
                 self.save_ens_decoded_to_storage(upsert_data, cursor)
                 self.save_ens_update_record_to_storage(upsert_record, cursor)
+                if is_primary:
+                    self.update_primary_name(process_result["set_name_record"], cursor)
             except Exception as ex:
                 error_msg = traceback.format_exc()
+                base_ts = time.mktime(time.strptime(block_datetime, "%Y-%m-%d %H:%M:%S"))
+                base_hour = time.strftime("%Y-%m-%d_%H", time.localtime(base_ts))
+                failed_path = os.path.join(ens_process, base_hour)
                 with open(failed_path, 'a+', encoding='utf-8') as fail:
-                    fail.write("transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
+                    fail.write("ENS transaction_hash {} error_msg: {}\n".format(transaction_hash, error_msg))
+
+        logging.info("ENS process start_block-end_block({}-{}) transaction_hash record count={}, end_at={}".format(
+            start_block, end_block, len(grouped), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+
+    def get_latest_block_from_db(self, cursor):
+        '''
+        description: blockNumber
+        '''
+        sql_query = "SELECT MAX(block_number) AS max_block_number FROM public.ens_txlogs"
+        cursor.execute(sql_query)
+        result = cursor.fetchone()
+        if result:
+            max_block_number = int(result[0])
+            logging.info("ENS Maximum Block Number: {}".format(max_block_number))
+            return max_block_number
+        else:
+            logging.info("ENS Initialize Block Number: {}".format(INITIALIZE_BLOCK_NUMBER))
+            return INITIALIZE_BLOCK_NUMBER
+
+    def read_records_by_block(self, cursor, start_block, end_block):
+        ssql = """
+            SELECT block_number, block_timestamp, transaction_hash, transaction_index, log_index, contract_address, contract_label, method_id, signature, decoded
+            FROM public.ens_txlogs
+            WHERE block_number >={} AND block_number < {}
+        """
+        cursor.execute(ssql.format(start_block, end_block))
+        rows = cursor.fetchall()
+        columns = ['block_number', 'block_timestamp', 'transaction_hash', 'transaction_index', 'log_index', 
+               'contract_address', 'contract_label', 'method_id', 'signature', 'decoded']
+        record_df = pd.DataFrame(rows, columns=columns)
+        record_df['block_timestamp'] = pd.to_datetime(record_df['block_timestamp'])
+        record_df['block_unix'] = record_df["block_timestamp"].view('int64')//10**9
+        return record_df
+
+    def online_dump(self):
+        pass
+
+    def offline_dump(self, check_point=None):
+        conn = psycopg2.connect(setting.PG_DSN["ens"])
+        conn.autocommit = True
+        cursor = conn.cursor()
+
+        ens_process = os.path.join(setting.Settings["datapath"], "ens_process")
+        if not os.path.exists(ens_process):
+            os.makedirs(ens_process)
+
+        base_start_block = INITIALIZE_BLOCK_NUMBER
+        if check_point is not None:
+            base_start_block = check_point
+        base_end_block = self.get_latest_block_from_db(cursor)
+        per_count = 10000
+        batch = math.ceil((base_end_block - base_end_block)/per_count)
+        for i in range(batch):
+            start_block_number = base_start_block + i * per_count
+            end_block_number = base_start_block + (i+1) * per_count
+
+            start = time.time()
+            logging.info("ENS transactions online dump start_block={}, end_block={} start at: {}".format(
+                start_block_number, end_block_number, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start))))
+            # process entry
+            self.pipeline(cursor, start_block_number, end_block_number)
+            end = time.time()
+            ts_delta = end - start
+            logging.info("ENS transactions online dump start_block={}, end_block={} end at: {}".format(
+                start_block_number, end_block_number, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end))))
+            logging.info("ENS transactions online dump start_block={}, end_block={} spends: {}".format(
+                start_block_number, end_block_number, ts_delta))
+
+        cursor.close()
+        conn.close()
 
 
 if __name__ == "__main__":
-    Worker().pipeline("2023-05-04.sample")
+    # Worker().pipeline("2023-05-04")
 
-    # parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped("wujunlin.eth")
-    # print(f"parent_node: {parent_node}")
-    # print(f"self_label: {self_label}")
-    # print(f"self_token_id: {self_token_id}")
-    # print(f"self_node: {self_node}")
+    parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped("wujunlin.eth")
+    print(f"parent_node: {parent_node}")
+    print(f"self_label: {self_label}")
+    print(f"self_token_id: {self_token_id}")
+    print(f"self_node: {self_node}")
 
-    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("wujunlin.eth")
-    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("juampi.base.eth")
-    # parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("tony.base.eth")
-    # parent_node, self_label, self_token_id, self_node = compute_namehash("zzfzz.eth")
-    # parent_node, self_label, self_token_id, self_node = compute_namehash("zzfzz.eth")
-    # print(f"parent_node: {parent_node}")
-    # print(f"self_label: {self_label}")
-    # print(f"self_token_id: {self_token_id}")
-    # print(f"self_node: {self_node}")
+    parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("wujunlin.eth")
+    parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("juampi.base.eth")
+    parent_node, self_label, self_token_id, self_node = compute_namehash_nowrapped("tony.base.eth")
+    parent_node, self_label, self_token_id, erc1155_token_id, self_node = compute_namehash("zzfzz.eth")
+    parent_node, self_label, self_token_id, erc1155_token_id, self_node = compute_namehash("zzfzz.eth")
+    print(f"parent_node: {parent_node}")
+    print(f"self_label: {self_label}")
+    print(f"self_token_id: {self_token_id}")
+    print(f"self_node: {self_node}")
 
 
-    # # Example usage
-    # the_address = "0xb86ff7e3f4e6186dfd25cff40605441d0c0481c4"
+    # Example usage
+    the_address = "0xb86ff7e3f4e6186dfd25cff40605441d0c0481c4"
 
-    # the_label, the_node = compute_label_and_node(the_address)
+    the_label, the_node = compute_label_and_node(the_address)
 
-    # # Output the results
-    # print(f"Label: {the_label}")
-    # print(f"Node: {the_node}")
+    # Output the results
+    print(f"Label: {the_label}")
+    print(f"Node: {the_node}")
 
-    # reverse_name = "[{}].addr.reverse".format(str(the_label).replace("0x", ""))
-    # reverse_token_id = bytes32_to_uint256(the_node)
-    # print(f"id: {reverse_token_id}")
-    # print(f"name: {reverse_name}")
+    reverse_name = "[{}].addr.reverse".format(str(the_label).replace("0x", ""))
+    reverse_token_id = bytes32_to_uint256(the_node)
+    print(f"id: {reverse_token_id}")
+    print(f"name: {reverse_name}")
 
     # 0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401
-    # decoded_str = '["0x6602a757e5aaf7980c14f17d9fcd1e012633dca97716efdd621c847bb0af2e6b", "0x0efddf037f9c48c9414ea4c95f52262d1dc6be5ba23932ef34e449808fd886ef", "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401"]'
-    # reverse, p_node, node, token_id, label, owner = NewOwner(decoded_str)
-    # print(reverse, p_node, node, token_id, label, owner)
+    decoded_str = '["0x6602a757e5aaf7980c14f17d9fcd1e012633dca97716efdd621c847bb0af2e6b", "0x0efddf037f9c48c9414ea4c95f52262d1dc6be5ba23932ef34e449808fd886ef", "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401"]'
+    reverse, p_node, node, token_id, label, owner = NewOwner(decoded_str)
+    print(reverse, p_node, node, token_id, label, owner)
 
-    # decoded_str = '["0x934b510d4c9103e6a87aef13b816fb080286d649", "0x0000000000000000000000000000000000000000", "0x934b510d4c9103e6a87aef13b816fb080286d649","80067465505413127536911696284953332658080992976543000343815247511973242098412","1"]'
-    # node, token_id, to_address = TransferSingle(decoded_str)
-    # print(node, token_id, to_address)
+    decoded_str = '["0x934b510d4c9103e6a87aef13b816fb080286d649", "0x0000000000000000000000000000000000000000", "0x934b510d4c9103e6a87aef13b816fb080286d649","80067465505413127536911696284953332658080992976543000343815247511973242098412","1"]'
+    node, token_id, to_address = TransferSingle(decoded_str)
+    print(node, token_id, to_address)
 
     # anthony-.eth 08616E74686F6E792D0365746800
     # niconico.eth 086E69636F6E69636F0365746800
-    # bytes_name = "0x" + "086E69636F6E69636F0365746800".lower()
-    # 05E2889174680365746800 ∑th
-    # bytes_name = "0x" + "05E2889174680365746800".lower()
-    # ens_name = decode_dns_style_name(bytes_name)
-    # print(ens_name)
-    # parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped(ens_name)
-    # print(f"parent_node: {parent_node}")
-    # print(f"self_label: {self_label}")
-    # print(f"self_token_id: {self_token_id}")
-    # print(f"self_node: {self_node}")
+    bytes_name = "0x" + "086E69636F6E69636F0365746800".lower()
+    # 05E2889174680365746800 ∑ths
+    bytes_name = "0x" + "05E2889174680365746800".lower()
+    ens_name = decode_dns_style_name(bytes_name)
+    print(ens_name)
+    parent_node, self_label, self_token_id, self_node = compute_namehash_wrapped(ens_name)
+    print(f"parent_node: {parent_node}")
+    print(f"self_label: {self_label}")
+    print(f"self_token_id: {self_token_id}")
+    print(f"self_node: {self_node}")
