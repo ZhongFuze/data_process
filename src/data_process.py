@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-10 13:31:18
+LastEditTime: 2024-09-10 14:32:14
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -29,7 +29,7 @@ from service.ens_txlogs import Fetcher as ENSLogFetcher
 from service.ens_worker import Worker as ENSProcessWorker
 from service.basenames_txlogs import Fetcher as BasenamesFetcher
 
-allow_basenames_checkpoint = True
+allow_basenames_checkpoint = False
 allow_ens_checkpoint = True
 
 def gnosis_job():
