@@ -14,6 +14,7 @@ CREATE TABLE ens_txlogs (
 
 CREATE INDEX idx_txlogs_index ON ens_txlogs (transaction_hash, transaction_index, log_index);
 CREATE INDEX timestamp_txlogs_index ON ens_txlogs (block_timestamp);
+CREATE INDEX blocknumber_txlogs_index ON ens_txlogs (block_number);
 
 BEGIN;
 TRUNCATE TABLE public.ens_txlogs;

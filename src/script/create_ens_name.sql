@@ -2,6 +2,7 @@ CREATE TABLE ens_name (
     id SERIAL PRIMARY KEY,
     namenode VARCHAR(66) NOT NULL,
     name VARCHAR(1024),
+    label_name VARCHAR(1024),
     label VARCHAR(66),
     erc721_token_id VARCHAR(255),
     erc1155_token_id VARCHAR(255),
@@ -18,11 +19,12 @@ CREATE TABLE ens_name (
     contenthash TEXT,
     update_time TIMESTAMP WITHOUT TIME ZONE,
     resolved_records JSONB default '{}'::jsonb,
-    key_value JSONB default '{}'::jsonb,
+    texts JSONB default '{}'::jsonb,
     CONSTRAINT unique_ens_name UNIQUE (namenode)
 );
 
 CREATE INDEX ens_name_index ON ens_name (name);
+CREATE INDEX ens_label_name_index ON ens_name (label_name);
 CREATE INDEX ens_name_owner_index ON ens_name (owner);
 CREATE INDEX ens_name_resolved_index ON ens_name (resolved_address);
 CREATE INDEX ens_name_reverse_index ON ens_name (reverse_address);
