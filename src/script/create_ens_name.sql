@@ -16,6 +16,7 @@ CREATE TABLE ens_name (
     resolver VARCHAR(42),
     resolved_address VARCHAR(42),
     reverse_address VARCHAR(42),
+    is_primary BOOLEAN DEFAULT FALSE,
     contenthash TEXT,
     update_time TIMESTAMP WITHOUT TIME ZONE,
     resolved_records JSONB default '{}'::jsonb,
