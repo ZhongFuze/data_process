@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-10 12:28:41
+LastEditTime: 2024-09-10 13:31:18
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -154,8 +154,8 @@ if __name__ == "__main__":
 
         # basenames_offline_process()
         # basenames_txlogs_dump_to_db()
-        ens_txlogs_offline_fetch()
-        ens_txlogs_offline_dump_to_db()
+        # ens_txlogs_offline_fetch()
+        # ens_txlogs_offline_dump_to_db()
         ens_offline_process()
         while True:
             time.sleep(60)

@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-07-31 08:22:15
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-10 13:02:40
+LastEditTime: 2024-09-10 13:30:14
 FilePath: /data_process/src/service/ens_worker.py
 Description: ens transactions logs process worker
 '''
@@ -1815,7 +1815,7 @@ class Worker():
             base_start_block = check_point
         base_end_block = self.get_latest_block_from_db(cursor)
         per_count = 10000
-        batch = math.ceil((base_end_block - base_end_block)/per_count)
+        batch = math.ceil((base_end_block - base_start_block)/per_count)
         for i in range(batch):
             start_block_number = base_start_block + i * per_count
             end_block_number = base_start_block + (i+1) * per_count
