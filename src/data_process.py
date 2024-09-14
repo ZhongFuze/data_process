@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-10 14:32:14
+LastEditTime: 2024-09-14 17:42:03
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -124,14 +124,14 @@ if __name__ == "__main__":
             id='gnosis_job'
         )
 
-        fname_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="18", minute="45", second="0"
-        )
-        scheduler.add_job(
-            firefly_farcaster_fname_job,
-            trigger=fname_trigger,
-            id='firefly_farcaster_fname_job'
-        )
+        # fname_trigger = CronTrigger(
+        #     year="*", month="*", day="*", hour="18", minute="45", second="0"
+        # )
+        # scheduler.add_job(
+        #     firefly_farcaster_fname_job,
+        #     trigger=fname_trigger,
+        #     id='firefly_farcaster_fname_job'
+        # )
 
         clusters_trigger = CronTrigger(
             year="*", month="*", day="*", hour="20", minute="40", second="0"
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         # basenames_txlogs_dump_to_db()
         # ens_txlogs_offline_fetch()
         # ens_txlogs_offline_dump_to_db()
-        ens_offline_process()
+        # ens_offline_process()
         while True:
             time.sleep(60)
             logging.info("just sleep for nothing")

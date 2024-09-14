@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2024-05-28 13:52:29
 LastEditors: Zella Zhong
-LastEditTime: 2024-08-16 14:57:51
+LastEditTime: 2024-09-04 16:56:19
 FilePath: /data_process/src/script/rs_parallel_testing.py
 Description: 
 '''
@@ -84,6 +84,7 @@ def domain_search_runner(info):
     }
     url = "http://127.0.0.1:3722"
     # url = "https://relation-service.nextnext.id"
+    # url = "https://relation-service-tiger.next.id"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
     }
@@ -127,7 +128,9 @@ def runner(info):
                 "identity": identity
             }
     }
-    url = "http://127.0.0.1:3722"
+    # url = "http://127.0.0.1:3722"
+    url = "http://ec2-18-167-19-252.ap-east-1.compute.amazonaws.com:3722"
+    # url = "https://relation-service-tiger.next.id"
     # url = "https://relation-service-tiger.next.id"
     headers = {
         "Content-Type": "application/json; charset=utf-8",
