@@ -4,7 +4,7 @@
 Author: Zella Zhong
 Date: 2023-05-24 13:51:41
 LastEditors: Zella Zhong
-LastEditTime: 2024-09-14 17:42:03
+LastEditTime: 2024-09-25 13:45:06
 FilePath: /data_process/src/data_process.py
 Description: 
 '''
@@ -29,8 +29,8 @@ from service.ens_txlogs import Fetcher as ENSLogFetcher
 from service.ens_worker import Worker as ENSProcessWorker
 from service.basenames_txlogs import Fetcher as BasenamesFetcher
 
-allow_basenames_checkpoint = False
-allow_ens_checkpoint = True
+allow_basenames_checkpoint = True
+allow_ens_checkpoint = False
 
 def gnosis_job():
     logging.info("Starting gnosis online fetch job...")
@@ -50,7 +50,7 @@ def basenames_job():
     global allow_basenames_checkpoint
     check_point = None
     if allow_basenames_checkpoint is True:
-        check_point = 19413725
+        check_point = 20101271
         logging.info("Starting basenames_job(check_point={}) online fetch job...".format(check_point))
         BasenamesFetcher().online_dump(check_point)
         check_point = None
@@ -143,7 +143,7 @@ if __name__ == "__main__":
         )
 
         basenames_trigger = CronTrigger(
-            year="*", month="*", day="*", hour="*", minute="1,31", second="1"
+            year="*", month="*", day="*", hour="0,4,8,12,16,20", minute="1", second="1"
         )
         scheduler.add_job(
             basenames_job,
